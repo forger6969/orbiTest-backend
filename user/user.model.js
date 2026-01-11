@@ -3,15 +3,21 @@ const { default: mongoose, Schema } = require("mongoose");
 const userSchema = mongoose.Schema({
   username: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  groupID: { type: Schema.Types.ObjectId, ref: "Group", default: "guest" },
+  password: { type: String, required: true, select: false },
+  groupID: { type: Schema.Types.ObjectId, ref: "Group", default: null },
   grade: {
     type: String,
     enum: ["junior", "strongJunior", "middle", "strongMiddle", "senior"],
     default: "junior",
   },
-  testsHistory:[{type:Schema.Types.ObjectId , ref:"TestResult"}],
-
+  gradeExperience:{type:Number , default:0},
+  testsHistory: [{ type: Schema.Types.ObjectId, ref: "TestResult" }],
+  role: { type: String, enum: ["user", "admin"], default: "user"},
+  avatar: {
+    type: String,
+    default:
+      "https://static.vecteezy.com/system/resources/thumbnails/009/292/244/small/default-avatar-icon-of-social-media-user-vector.jpg",
+  },
 });
 
 /** @type {import("mongoose").Model} */
