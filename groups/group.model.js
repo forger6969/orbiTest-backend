@@ -3,7 +3,7 @@ const { default: mongoose, Schema } = require("mongoose");
 const groupSchema = mongoose.Schema({
   groupName: { type: String, required: true },
   groupDescribe: { type: String, default: "" },
-  students: [{ type: Schema.Types.ObjectId, ref: "User" }],
+  students: [{ type: Schema.Types.ObjectId, ref: "User" , unique:true }],
   avatar: {
     type: String,
     default:
