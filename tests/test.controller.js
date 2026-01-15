@@ -1,7 +1,8 @@
 const { array } = require("zod");
 const Result = require("./result.model");
 const Test = require("./test.model");
-const User = require("../user/user.model");
+const { User, grades } = require("../user/user.model");
+const { sendToUser } = require("../socket/notify");
 
 const getAllTests = async (req, res) => {
   try {
@@ -66,7 +67,7 @@ const addResult = async (req, res) => {
     }
 
     const test = await Test.findById(testId).select("+questions.correctAnswer");
-    const user = await User.findById(id)
+    const user = await User.findById(id);
 
     if (!test) {
       return res
@@ -97,35 +98,58 @@ const addResult = async (req, res) => {
       });
     });
 
+    const procent = (score / test.maxScore) * 100;
+
     const result = new Result({
       user: id,
       test: testId,
       score,
       answers: checkedAnswers,
+      successRate: procent,
     });
 
     await result.save();
 
-    const procent = (result.score / test.maxScore) * 100
+    sendToUser(user._id, "notification", {
+      title: "Тест завершён 🎉",
+      message: `Результат: ${Math.round(procent)}%`,
+    });
 
     if (procent >= 85) {
+      user.gradeExperience += test.gradeExperience;
+
+      if (user.gradeExperience >= 100) {
+        const currentUserGrade = grades.findIndex((f) => f === user.grade);
+
+        if (currentUserGrade < grades.length - 1) {
+          user.grade = grades[currentUserGrade + 1];
+          user.gradeExperience = 0;
+
+          sendToUser(user._id, "notification", {
+            title: `Повышение ранга`,
+            message: `Ваш ранг повышен с ${grades[currentUserGrade]} на ${user.grade}`,
+          });
+        }
+      }
+
+      await user.save();
     }
 
+    res.json({ result, user });
 
-    res.json({ result });
-
-    const allResults = await Result.find({test: test._id})
+    const allResults = await Result.find({ test: test._id });
     console.log(allResults);
 
-
-    const average =  Math.round(allResults.reduce((accum , item)=> accum + item.score , 0) / allResults.length)
+    const average = Math.round(
+      allResults.reduce((accum, item) => accum + item.score, 0) /
+      
+        allResults.length
+    );
     console.log(average);
-    
 
-    test.results.push(result._id)
-    test.averageResult = average
-    await test.save()
-
+    test.results.push(result._id);
+    test.averageResult = average;
+    await test.save();
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

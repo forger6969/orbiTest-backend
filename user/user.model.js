@@ -10,9 +10,9 @@ const userSchema = mongoose.Schema({
     enum: ["junior", "strongJunior", "middle", "strongMiddle", "senior"],
     default: "junior",
   },
-  gradeExperience:{type:Number , default:0},
+  gradeExperience: { type: Number, default: 0 },
   testsHistory: [{ type: Schema.Types.ObjectId, ref: "TestResult" }],
-  role: { type: String, enum: ["user", "admin"], default: "user"},
+  role: { type: String, enum: ["user", "admin"], default: "user" },
   avatar: {
     type: String,
     default:
@@ -22,5 +22,6 @@ const userSchema = mongoose.Schema({
 
 /** @type {import("mongoose").Model} */
 const User = mongoose.model("User", userSchema);
+const grades = ["junior", "strongJunior", "middle", "strongMiddle", "senior"];
 
-module.exports = User;
+module.exports = {User , grades};

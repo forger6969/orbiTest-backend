@@ -11,8 +11,9 @@ const resultSchema = mongoose.Schema({
       correct: { type: Boolean, required: true },
     },
   ],
+  successRate: { type: Number, required: true },
 });
 
 const Result = mongoose.model("Result", resultSchema);
 
-module.exports = Result
+module.exports = Result;
