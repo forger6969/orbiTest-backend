@@ -3,6 +3,23 @@ const Result = require("./result.model");
 const Test = require("./test.model");
 const { User, grades } = require("../user/user.model");
 const { sendToUser } = require("../socket/notify");
+const Notify = require("../notification/notify.model");
+
+const createAndSendNotify = async ({
+  userId,
+  title,
+  text,
+  notifyType = "success",
+}) => {
+  const notify = await Notify.create({
+    user: userId,
+    title,
+    text,
+    notifyType,
+  });
+
+  sendToUser(userId, "notification", notify);
+};
 
 const getAllTests = async (req, res) => {
   try {
@@ -58,38 +75,31 @@ const createNewTest = async (req, res) => {
 const addResult = async (req, res) => {
   try {
     const { testId, answers } = req.body;
-    const { id } = req.user;
+    const { id: userId } = req.user;
 
     if (!testId || !answers) {
       return res
         .status(400)
-        .json({ success: false, message: "add reqired fields!" });
+        .json({ success: false, message: "add required fields!" });
     }
 
     const test = await Test.findById(testId).select("+questions.correctAnswer");
-    const user = await User.findById(id);
+    const user = await User.findById(userId);
 
     if (!test) {
-      return res
-        .status(404)
-        .json({ success: false, message: "test not found" });
+      return res.status(404).json({ success: false, message: "test not found" });
     }
 
     let score = 0;
     let checkedAnswers = [];
 
+    // Проверяем ответы
     test.questions.forEach((q) => {
       const userAnswer = answers.find((f) => f.questionId === q._id.toString());
-
-      if (!userAnswer) {
-        return;
-      }
+      if (!userAnswer) return;
 
       const isCorrect = userAnswer.answer === q.correctAnswer;
-
-      if (isCorrect) {
-        score += q.questionsScore;
-      }
+      if (isCorrect) score += q.questionsScore;
 
       checkedAnswers.push({
         questionId: q._id.toString(),
@@ -100,34 +110,39 @@ const addResult = async (req, res) => {
 
     const procent = (score / test.maxScore) * 100;
 
+    // Сохраняем результат
     const result = new Result({
-      user: id,
+      user: userId,
       test: testId,
       score,
       answers: checkedAnswers,
       successRate: procent,
     });
-
     await result.save();
 
-    sendToUser(user._id, "notification", {
+    // Создаем уведомление о завершении теста
+    await sendToUser(userId, {
       title: "Тест завершён 🎉",
-      message: `Результат: ${Math.round(procent)}%`,
+      text: `Результат: ${Math.round(procent)}%`,
+      notifyType: "success",
     });
 
+    // Если успех >= 85%, повышаем опыт и ранг
     if (procent >= 85) {
-      user.gradeExperience += test.gradeExperience;
+      user.gradeExperience += test.gradeExperience || 0;
 
       if (user.gradeExperience >= 100) {
-        const currentUserGrade = grades.findIndex((f) => f === user.grade);
-
+        const currentUserGrade = grades.findIndex((g) => g === user.grade);
         if (currentUserGrade < grades.length - 1) {
+          const oldGrade = user.grade;
           user.grade = grades[currentUserGrade + 1];
           user.gradeExperience = 0;
 
-          sendToUser(user._id, "notification", {
-            title: `Повышение ранга`,
-            message: `Ваш ранг повышен с ${grades[currentUserGrade]} на ${user.grade}`,
+          // Уведомление о повышении ранга
+          await sendToUser(userId, {
+            title: "Повышение ранга 🚀",
+            text: `Ваш ранг повышен с ${oldGrade} на ${user.grade}`,
+            notifyType: "gradeUp",
           });
         }
       }
@@ -135,22 +150,19 @@ const addResult = async (req, res) => {
       await user.save();
     }
 
-    res.json({ result, user });
-
+    // Обновляем тест: результаты + средний балл
+    test.results.push(result._id);
     const allResults = await Result.find({ test: test._id });
-    console.log(allResults);
-
     const average = Math.round(
       allResults.reduce((accum, item) => accum + item.score, 0) /
-      
-        allResults.length
+      allResults.length
     );
-    console.log(average);
-
-    test.results.push(result._id);
     test.averageResult = average;
     await test.save();
+
+    res.json({ success: true, result, user });
   } catch (err) {
+    console.error("AddResult error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };

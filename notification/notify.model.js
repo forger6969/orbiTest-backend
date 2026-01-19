@@ -3,7 +3,7 @@ const { default: mongoose, Schema } = require("mongoose");
 const notifySchema = mongoose.Schema({
   title: { type: String, required: true },
   text: { type: String, required: true },
-  user: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  user: { type: Schema.Types.ObjectId, ref: "User",},
   notifyType: {
     type: String,
     enum: ["gradeUp", "error", "warning", "success"],
@@ -15,3 +15,6 @@ const notifySchema = mongoose.Schema({
     expires: 60 * 60 * 24 * 2, 
   },
 });
+
+const Notify = mongoose.model("Notify" , notifySchema)
+module.exports = Notify

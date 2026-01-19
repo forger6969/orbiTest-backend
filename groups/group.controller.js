@@ -46,7 +46,7 @@ const addStudentToGroup = async (req, res) => {
       },
       {
         new: true,
-      }
+      },
     );
 
     if (!updatedGroup) {
@@ -55,7 +55,10 @@ const addStudentToGroup = async (req, res) => {
         .json({ success: false, message: "group not found" });
     }
 
-    res.json({success:true , updatedGroup})
+    user.groupID = groupId;
+    await user.save();
+
+    res.json({ success: true, updatedGroup });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -63,5 +66,5 @@ const addStudentToGroup = async (req, res) => {
 
 module.exports = {
   createGroup,
-  addStudentToGroup
+  addStudentToGroup,
 };
