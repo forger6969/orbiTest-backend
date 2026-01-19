@@ -5,6 +5,9 @@ const { Server } = require("socket.io");
 const app = require("./app");
 const { initSocket } = require("./socket/socket");
 const { setIO } = require("./socket/io");
+const { sendExamNotification } = require("./telegrambot/bot");
+const { startAgenda } = require("./agenda/agenda");
+
 
 const server = http.createServer(app);
 
@@ -14,6 +17,7 @@ const io = new Server(server, {
 
 // 🔥 ИНИЦИАЛИЗИРУЕМ SOCKET ТОЛЬКО ЗДЕСЬ
 initSocket(io);
+startAgenda()
 setIO(io)
 
 mongoose

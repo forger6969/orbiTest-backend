@@ -64,7 +64,17 @@ const addStudentToGroup = async (req, res) => {
   }
 };
 
+const getAllGroups = async (req, res) => {
+  try {
+    const groups = await Group.find();
+    res.json({ success: true, groups });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   createGroup,
   addStudentToGroup,
+  getAllGroups,
 };
