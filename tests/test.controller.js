@@ -1,4 +1,4 @@
-const { array } = require("zod");
+const { array, success } = require("zod");
 const Result = require("./result.model");
 const Test = require("./test.model");
 const { User, grades } = require("../user/user.model");
@@ -87,7 +87,9 @@ const addResult = async (req, res) => {
     const user = await User.findById(userId);
 
     if (!test) {
-      return res.status(404).json({ success: false, message: "test not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "test not found" });
     }
 
     let score = 0;
@@ -155,7 +157,7 @@ const addResult = async (req, res) => {
     const allResults = await Result.find({ test: test._id });
     const average = Math.round(
       allResults.reduce((accum, item) => accum + item.score, 0) /
-      allResults.length
+        allResults.length,
     );
     test.averageResult = average;
     await test.save();
@@ -167,9 +169,34 @@ const addResult = async (req, res) => {
   }
 };
 
+const getResults = async (req, res) => {
+  try {
+    const { id } = req.user;
+    const tests = await Result.find({ user: id });
+
+    res.json({ tests });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+const getAllTypesTest = async (req ,res)=>{
+  try {
+    
+    const types = await Test.distinct("testType")
+    res.json({types , count:types.length})
+
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+    
+  }
+}
+
 module.exports = {
   createNewTest,
   getAllTests,
   getTestById,
   addResult,
+  getResults,
+  getAllTypesTest
 };

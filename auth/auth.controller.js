@@ -1,19 +1,46 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const { User } = require("../user/user.model");
+const { bot } = require("../telegrambot/bot");
+const Group = require("../groups/group.model");
 
 const registerUser = async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, groupID } = req.body;
 
-    if (!username || !email || !password) {
+    if (!username || !email || !password || !groupID) {
       return res.status(400).json({ success: false, message: "add all keys!" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = new User({ username, email, password: hashedPassword});
+    const findGroupd = await Group.findById(groupID);
+
+    if (!findGroupd) {
+      return res
+        .status(404)
+        .json({ success: false, message: "group not found" });
+    }
+
+    const newUser = new User({
+      username,
+      email,
+      password: hashedPassword,
+      groupID: groupID ? groupID : null,
+    });
+
     await newUser.save();
+
+    findGroupd.students.push(newUser._id);
+    await findGroupd.save();
+
+    if (findGroupd.telegramId) {
+      await bot.sendMessage(
+        findGroupd.telegramId,
+        `В вашей группе новый участник!\nИмя:${newUser.username}\nEmail:${newUser.email}`,
+        { parse_mode: "Markdown" },
+      );
+    }
 
     res.json({ success: true, message: "User registered", newUser });
   } catch (err) {
