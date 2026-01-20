@@ -4,7 +4,7 @@ const getMe = async (req, res) => {
   try {
     const { id } = req.user;
 
-    const user = await User.findById(id);
+    const user = await User.findById(id).populate("groupID");
     if (!user) {
       return res
         .status(404)

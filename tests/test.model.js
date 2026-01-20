@@ -48,10 +48,11 @@ const testSchema = mongoose.Schema(
     },
     results: [{ type: Schema.Types.ObjectId, ref: "Result" }],
     averageResult: { type: Number, default: 0 },
+    testTime: { type: Number, default: 1200000 },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 testSchema.virtual("questionsCount").get(function () {
