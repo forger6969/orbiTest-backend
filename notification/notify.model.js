@@ -6,7 +6,7 @@ const notifySchema = mongoose.Schema({
   user: { type: Schema.Types.ObjectId, ref: "User",},
   notifyType: {
     type: String,
-    enum: ["gradeUp", "error", "warning", "success"],
+    enum: ["gradeUp", "error", "warning", "success" , "info"],
   },
   status:{type:String , enum:["viewed" , "pending"]},
   createdAt: {

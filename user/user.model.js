@@ -11,7 +11,7 @@ const userSchema = mongoose.Schema({
     default: "junior",
   },
   gradeExperience: { type: Number, default: 0 },
-  testsHistory: [{ type: Schema.Types.ObjectId, ref: "TestResult" }],
+  testsHistory: [{ type: Schema.Types.ObjectId, ref: "Result" }],
   role: { type: String, enum: ["user", "admin"], default: "user" },
   avatar: {
     type: String,

@@ -12,6 +12,9 @@ const resultSchema = mongoose.Schema({
     },
   ],
   successRate: { type: Number, required: true },
+},
+{
+  timestamps:true
 });
 
 const Result = mongoose.model("Result", resultSchema);

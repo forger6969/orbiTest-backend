@@ -129,6 +129,9 @@ const addResult = async (req, res) => {
       notifyType: "success",
     });
 
+    user.testsHistory.push(result)
+    await user.save()
+
     // Если успех >= 85%, повышаем опыт и ранг
     if (procent >= 85) {
       user.gradeExperience += test.gradeExperience || 0;
