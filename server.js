@@ -15,9 +15,11 @@ const io = new Server(server, {
   cors: { origin: "*" },
 });
 
-// 🔥 ИНИЦИАЛИЗИРУЕМ SOCKET ТОЛЬКО ЗДЕСЬ
+// socket.io ni init qilish
 initSocket(io);
+// agendani ishga churish
 startAgenda()
+// bilmiman
 setIO(io)
 
 mongoose
@@ -33,5 +35,4 @@ io.on("connection", () => {
   console.log("Socket connected (root test)");
 });
 
-// 👇 экспорт нужен ТОЛЬКО для emit
 module.exports = { io };

@@ -12,14 +12,13 @@ const tokenMiddleware = async (req, res, next) => {
     }
 
     let decoded;
-
-    // сначала пробуем проверить как админ
+// birnchi bolib admin ni teskhirib koramizza
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET_ADMIN);
       req.user = { id: decoded.id || decoded._id, admin: true };
       return next();
     } catch {
-      // если не админ, проверяем как обычный пользователь
+      // agar kak admin dek otomasa uje kak user tekshiramiza
       decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.user = { id: decoded.id || decoded._id, admin: false };
       return next();

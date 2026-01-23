@@ -5,6 +5,7 @@ const { User, grades } = require("../user/user.model");
 const { sendToUser } = require("../socket/notify");
 const Notify = require("../notification/notify.model");
 
+// helper function notify jonatishga
 const createAndSendNotify = async ({
   userId,
   title,
@@ -21,6 +22,8 @@ const createAndSendNotify = async ({
   sendToUser(userId, "notification", notify);
 };
 
+// hamma bor testlani olish
+
 const getAllTests = async (req, res) => {
   try {
     const tests = await Test.find();
@@ -30,6 +33,8 @@ const getAllTests = async (req, res) => {
   }
 };
 
+
+// id boyicha 1 ta testni olish
 const getTestById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -46,6 +51,8 @@ const getTestById = async (req, res) => {
   } catch (err) {}
 };
 
+
+// yangi test create qilish (faqat admin ni dostupi bor)
 const createNewTest = async (req, res) => {
   try {
     const { testType, questions, testTitle, testGrade, gradeExperience } =
@@ -63,7 +70,7 @@ const createNewTest = async (req, res) => {
         .json({ success: false, message: "add required fields" });
     }
 
-    const newTest = new Test(req.body);
+    const newTest = new Test({testType , questions , testTitle , testGrade , gradeExperience});
     await newTest.save();
 
     res.json({ success: true, newTest });
@@ -83,6 +90,7 @@ const addResult = async (req, res) => {
         .json({ success: false, message: "add required fields!" });
     }
 
+    // select qilinvotti chunki togri javolari olib tashlangan (model da select:false qilingan)
     const test = await Test.findById(testId).select("+questions.correctAnswer");
     const user = await User.findById(userId);
 
@@ -95,7 +103,7 @@ const addResult = async (req, res) => {
     let score = 0;
     let checkedAnswers = [];
 
-    // Проверяем ответы
+    // javoblarni tekshirish
     test.questions.forEach((q) => {
       const userAnswer = answers.find((f) => f.questionId === q._id.toString());
       if (!userAnswer) return;
@@ -142,7 +150,7 @@ const addResult = async (req, res) => {
           user.grade = grades[currentUserGrade + 1];
           user.gradeExperience = 0;
 
-          // Уведомление о повышении ранга
+          // studentga websocket orqali gradeUP hadiqa notification jonatish
           await sendToUser(userId, {
             title: "Повышение ранга 🚀",
             text: `Ваш ранг повышен с ${oldGrade} на ${user.grade}`,
@@ -154,7 +162,7 @@ const addResult = async (req, res) => {
       await user.save();
     }
 
-    // Обновляем тест: результаты + средний балл
+    // testni update qilish (shu testdan ortacha ball nechi olionishi ni ozgartirish)
     test.results.push(result._id);
     const allResults = await Result.find({ test: test._id });
     const average = Math.round(
@@ -171,6 +179,7 @@ const addResult = async (req, res) => {
   }
 };
 
+// token dagi id orqali shu user ni hamma resultarini olish
 const getResults = async (req, res) => {
   try {
     const { id } = req.user;
@@ -182,6 +191,7 @@ const getResults = async (req, res) => {
   }
 };
 
+// qanaqa type dagi test la borligini olish
 const getAllTypesTest = async (req, res) => {
   try {
     const types = await Test.distinct("testType");
