@@ -539,16 +539,17 @@ process.on("SIGINT", async () => {
 });
 
 process.on("SIGTERM", async () => {
-  log.info("Получен сигнал SIGTERM. Останавливаем бота...");
+  log.info("SIGTERM получен, останавливаем Agenda...");
   try {
-    await bot.deleteWebHook();
-    log.success("Webhook удален");
+    await agenda.stop(); // останавливаем задачи
+    log.success("Agenda остановлена");
     process.exit(0);
-  } catch (error) {
-    log.error("Ошибка при удалении webhook:", error);
+  } catch (err) {
+    log.error("Ошибка остановки Agenda:", err);
     process.exit(1);
   }
 });
+
 
 // Запускаем бота при импорте
 initBot();
