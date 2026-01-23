@@ -5,6 +5,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const Group = require("../groups/group.model");
 const Exam = require("../exams/exam.model");
+const {agenda} = require("../agenda/agenda")
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
