@@ -599,6 +599,4 @@ module.exports = {
 };
 
 // Запускаем бота только если это главный модуль
-if (require.main === module) {
   initBot();
-}
