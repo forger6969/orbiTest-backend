@@ -506,8 +506,7 @@ async function initBot() {
     log.info("Старый webhook удален");
 
     // Устанавливаем новый webhook
-    const webhookPath = `${WEBHOOK_URL}/bot${BOT_TOKEN}`;
-    await bot.setWebHook(webhookPath);
+    await bot.setWebHook(WEBHOOK_URL + webhookPath);
 
     const webhookInfo = await bot.getWebHookInfo();
     log.success(`Webhook установлен: ${webhookInfo.url}`);
