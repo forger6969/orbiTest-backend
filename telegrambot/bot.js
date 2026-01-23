@@ -5,18 +5,10 @@ const express = require("express");
 const mongoose = require("mongoose");
 const Group = require("../groups/group.model");
 const Exam = require("../exams/exam.model");
-const { agenda } = require("../agenda/agenda");
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
 const PORT = process.env.PORT || 3000;
-
-// Создаем бота БЕЗ polling
-const bot = new TelegramBot(BOT_TOKEN, { polling: false });
-
-// Создаем Express сервер для webhook
-const app = express();
-app.use(express.json());
 
 const log = {
   info: (msg) => console.log(`[INFO] ${new Date().toISOString()} - ${msg}`),
@@ -25,6 +17,17 @@ const log = {
   success: (msg) =>
     console.log(`[SUCCESS] ${new Date().toISOString()} - ${msg}`),
 };
+
+// Создаем Express сервер для webhook ПЕРЕД созданием бота
+const app = express();
+app.use(express.json());
+
+// Создаем бота БЕЗ polling
+const bot = new TelegramBot(BOT_TOKEN, { polling: false });
+
+// ============================================
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// ============================================
 
 async function isUserAdmin(chatId, userId) {
   try {
@@ -158,7 +161,7 @@ const getStudentsThisGroup = async (chatid) => {
   const group = await Group.findOne({ telegramId: chatid }).populate(
     "students",
   );
-  return group.students;
+  return group?.students || [];
 };
 
 // ============================================
@@ -403,6 +406,10 @@ bot.on("callback_query", async (callbackQuery) => {
   }
 });
 
+// ============================================
+// ФУНКЦИЯ ОТПРАВКИ УВЕДОМЛЕНИЙ
+// ============================================
+
 async function sendExamNotification(exam) {
   try {
     const group = await Group.findById(exam.group);
@@ -453,19 +460,27 @@ async function sendExamNotification(exam) {
 // WEBHOOK ENDPOINTS
 // ============================================
 
-// Endpoint для получения обновлений от Telegram
-
-const webhookPath = `/bot/${encodeURIComponent(BOT_TOKEN)}`;
+// ИСПРАВЛЕНО: webhook path без encodeURIComponent
+const webhookPath = `/bot${BOT_TOKEN}`;
 
 app.post(webhookPath, (req, res) => {
-  log.info(`Получен webhook запрос: ${JSON.stringify(req.body)}`);
-  bot.processUpdate(req.body);
-  res.sendStatus(200);
+  try {
+    log.info(`Получен webhook запрос от Telegram`);
+    bot.processUpdate(req.body);
+    res.sendStatus(200);
+  } catch (error) {
+    log.error("Ошибка обработки webhook:", error);
+    res.sendStatus(500);
+  }
 });
 
 // Health check endpoint
 app.get("/health", (req, res) => {
-  res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
+  res.status(200).json({ 
+    status: "OK", 
+    timestamp: new Date().toISOString(),
+    bot: "active"
+  });
 });
 
 // Endpoint для проверки webhook
@@ -501,12 +516,13 @@ async function initBot() {
       process.exit(1);
     }
 
-    // Сначала удаляем старый webhook
-    await bot.deleteWebHook();
-    log.info("Старый webhook удален");
+    // Сначала удаляем старый webhook и все накопленные обновления
+    await bot.deleteWebHook({ drop_pending_updates: true });
+    log.info("Старый webhook удален, pending updates очищены");
 
-    // Устанавливаем новый webhook
-    await bot.setWebHook(WEBHOOK_URL + webhookPath);
+    // ИСПРАВЛЕНО: правильный URL без лишнего кодирования
+    const fullWebhookUrl = `${WEBHOOK_URL}${webhookPath}`;
+    await bot.setWebHook(fullWebhookUrl);
 
     const webhookInfo = await bot.getWebHookInfo();
     log.success(`Webhook установлен: ${webhookInfo.url}`);
@@ -522,9 +538,9 @@ async function initBot() {
     // Запускаем Express сервер
     app.listen(PORT, () => {
       log.success(`Express сервер запущен на порту ${PORT}`);
-      log.info(`Webhook endpoint: POST ${webhookPath}`);
-      log.info(`Health check: GET http://localhost:${PORT}/health`);
-      log.info(`Webhook info: GET http://localhost:${PORT}/webhook-info`);
+      log.info(`Webhook endpoint: POST ${fullWebhookUrl}`);
+      log.info(`Health check: GET /health`);
+      log.info(`Webhook info: GET /webhook-info`);
     });
   } catch (error) {
     log.error("Ошибка инициализации бота:", error);
@@ -546,20 +562,24 @@ process.on("SIGINT", async () => {
 });
 
 process.on("SIGTERM", async () => {
-  log.info("SIGTERM получен, останавливаем Agenda...");
+  log.info("SIGTERM получен, останавливаем бота...");
   try {
-    await agenda.stop(); // останавливаем задачи
+    await bot.deleteWebHook();
+    log.success("Webhook удален");
+    
+    // Импортируем agenda только если нужен
+    const { agenda } = require("../agenda/agenda");
+    await agenda.stop();
     log.success("Agenda остановлена");
+    
     process.exit(0);
   } catch (err) {
-    log.error("Ошибка остановки Agenda:", err);
+    log.error("Ошибка остановки:", err);
     process.exit(1);
   }
 });
 
-// Запускаем бота при импорте
-initBot();
-
+// ВАЖНО: Экспортируем функции ДО инициализации
 module.exports = {
   bot,
   sendExamNotification,
@@ -567,3 +587,8 @@ module.exports = {
   createAndLinkNewGroup,
   app,
 };
+
+// Запускаем бота только если это главный модуль
+if (require.main === module) {
+  initBot();
+}

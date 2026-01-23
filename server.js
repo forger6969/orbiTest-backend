@@ -5,7 +5,7 @@ const { Server } = require("socket.io");
 const app = require("./app");
 const { initSocket } = require("./socket/socket");
 const { setIO } = require("./socket/io");
-const { sendExamNotification } = require("./telegrambot/bot");
+const { initBot } = require("./telegrambot/bot");
 const { startAgenda } = require("./agenda/agenda");
 
 
