@@ -6,6 +6,7 @@ const mongoose = require("mongoose");
 const Group = require("../groups/group.model");
 const Exam = require("../exams/exam.model");
 const {agenda} = require("../agenda/agenda")
+const app = require("../app")
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
@@ -15,8 +16,7 @@ const PORT = process.env.PORT || 3000;
 const bot = new TelegramBot(BOT_TOKEN, { polling: false });
 
 // Создаем Express сервер для webhook
-const app = express();
-app.use(express.json());
+
 
 const log = {
   info: (msg) => console.log(`[INFO] ${new Date().toISOString()} - ${msg}`),
