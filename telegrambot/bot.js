@@ -5,7 +5,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const Group = require("../groups/group.model");
 const Exam = require("../exams/exam.model");
-const {agenda} = require("../agenda/agenda")
+const { agenda } = require("../agenda/agenda");
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
@@ -454,7 +454,10 @@ async function sendExamNotification(exam) {
 // ============================================
 
 // Endpoint для получения обновлений от Telegram
-app.post(`/bot${BOT_TOKEN}`, (req, res) => {
+
+const webhookPath = `/bot/${encodeURIComponent(BOT_TOKEN)}`;
+
+app.post(webhookPath, (req, res) => {
   log.info(`Получен webhook запрос: ${JSON.stringify(req.body)}`);
   bot.processUpdate(req.body);
   res.sendStatus(200);
