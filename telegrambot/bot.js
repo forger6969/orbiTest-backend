@@ -35,9 +35,6 @@ async function isUserAdmin(chatId, userId) {
   }
 }
 
-/**
- * Проверяет, является ли бот администратором группы
- */
 async function isBotAdmin(chatId) {
   try {
     const botInfo = await bot.getMe();
@@ -49,9 +46,6 @@ async function isBotAdmin(chatId) {
   }
 }
 
-/**
- * Получает все группы из MongoDB
- */
 async function getAllGroups() {
   try {
     const groups = await Group.find({}).select("_id groupName groupDescribe");
@@ -62,9 +56,6 @@ async function getAllGroups() {
   }
 }
 
-/**
- * Проверяет, привязана ли уже какая-то группа к этому Telegram chat
- */
 async function isGroupAlreadyLinked(chatId) {
   try {
     const group = await Group.findOne({ telegramId: chatId.toString() });
@@ -75,9 +66,6 @@ async function isGroupAlreadyLinked(chatId) {
   }
 }
 
-/**
- * Привязывает группу к Telegram
- */
 async function linkGroupToTelegram(groupId, chatId) {
   try {
     const group = await Group.findById(groupId);
@@ -86,7 +74,6 @@ async function linkGroupToTelegram(groupId, chatId) {
       return { success: false, message: "Группа не найдена в базе данных" };
     }
 
-    // Проверяем, не привязана ли уже эта группа к другому чату
     if (group.telegramId && group.telegramId !== chatId.toString()) {
       return {
         success: false,
@@ -94,7 +81,6 @@ async function linkGroupToTelegram(groupId, chatId) {
       };
     }
 
-    // Привязываем
     group.telegramId = chatId.toString();
     await group.save();
 
@@ -113,16 +99,11 @@ async function linkGroupToTelegram(groupId, chatId) {
   }
 }
 
-/**
- * Создает новую группу в MongoDB и сразу привязывает к Telegram
- */
 async function createAndLinkNewGroup(chatId, chatTitle) {
   try {
-    // Проверяем, не существует ли уже группа с таким названием
     const existingGroup = await Group.findOne({ groupName: chatTitle });
 
     if (existingGroup) {
-      // Если группа существует, просто привязываем её
       if (
         existingGroup.telegramId &&
         existingGroup.telegramId !== chatId.toString()
@@ -143,7 +124,6 @@ async function createAndLinkNewGroup(chatId, chatTitle) {
       };
     }
 
-    // Создаем новую группу
     const newGroup = new Group({
       groupName: chatTitle,
       groupDescribe: `Автоматически создано из Telegram группы`,
@@ -182,15 +162,13 @@ const getStudentsThisGroup = async (chatid) => {
 // ОБРАБОТЧИКИ КОМАНД
 // ============================================
 
-/**
- * Команда /start
- */
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
   const chatType = msg.chat.type;
 
-  // Команда работает только в группах и супергруппах
+  log.info(`Получена команда /start от пользователя ${userId} в чате ${chatId}`);
+
   if (!["group", "supergroup"].includes(chatType)) {
     return bot.sendMessage(
       chatId,
@@ -198,7 +176,6 @@ bot.onText(/\/start/, async (msg) => {
     );
   }
 
-  // Проверяем, что пользователь - админ
   const userIsAdmin = await isUserAdmin(chatId, userId);
   if (!userIsAdmin) {
     return bot.sendMessage(
@@ -207,7 +184,6 @@ bot.onText(/\/start/, async (msg) => {
     );
   }
 
-  // Проверяем, что бот - админ
   const botIsAdmin = await isBotAdmin(chatId);
   if (!botIsAdmin) {
     return bot.sendMessage(
@@ -216,7 +192,6 @@ bot.onText(/\/start/, async (msg) => {
     );
   }
 
-  // Проверяем, не привязана ли уже группа
   const linkedGroup = await isGroupAlreadyLinked(chatId);
   if (linkedGroup) {
     return bot.sendMessage(
@@ -226,7 +201,6 @@ bot.onText(/\/start/, async (msg) => {
     );
   }
 
-  // Отправляем приветственное сообщение с кнопкой
   const keyboard = {
     inline_keyboard: [
       [{ text: "🔗 Прикрепить эту группу", callback_data: "attach_group" }],
@@ -241,18 +215,17 @@ bot.onText(/\/start/, async (msg) => {
   );
 });
 
-/**
- * Команда /help
- */
 bot.onText(/\/help/, (msg) => {
   const chatId = msg.chat.id;
+  log.info(`Получена команда /help в чате ${chatId}`);
 
   const helpText =
     "📚 *OrbiTest Bot - Помощь*\n\n" +
     "*Доступные команды:*\n" +
     "/start - Начать настройку и привязать группу\n" +
     "/help - Показать это сообщение\n" +
-    "/status - Проверить статус подключения\n\n" +
+    "/status - Проверить статус подключения\n" +
+    "/students - Список студентов группы\n\n" +
     "*Возможности бота:*\n" +
     "✅ Привязка Telegram группы к OrbiTest\n" +
     "✅ Создание новой группы автоматически\n" +
@@ -267,23 +240,32 @@ bot.onText(/\/help/, (msg) => {
 
 bot.onText(/\/students/, async (msg) => {
   const chatId = msg.chat.id;
+  log.info(`Получена команда /students в чате ${chatId}`);
 
-  const students = await getStudentsThisGroup(chatId);
-  const message = students
-    .map(
-      (student, index) =>
-        `${index + 1}. ${student.firstName} ${student.lastName} (${student.email})`,
-    )
-    .join("\n");
+  try {
+    const students = await getStudentsThisGroup(chatId);
+    
+    if (!students || students.length === 0) {
+      return bot.sendMessage(chatId, "📋 В этой группе пока нет студентов.");
+    }
 
-  bot.sendMessage(chatId, message);
+    const message = "👥 *Студенты группы:*\n\n" + students
+      .map(
+        (student, index) =>
+          `${index + 1}. ${student.firstName} ${student.lastName} (${student.email})`,
+      )
+      .join("\n");
+
+    bot.sendMessage(chatId, message, { parse_mode: "Markdown" });
+  } catch (error) {
+    log.error("Ошибка получения студентов:", error);
+    bot.sendMessage(chatId, "❌ Ошибка при получении списка студентов.");
+  }
 });
 
-/**
- * Команда /status
- */
 bot.onText(/\/status/, async (msg) => {
   const chatId = msg.chat.id;
+  log.info(`Получена команда /status в чате ${chatId}`);
 
   const linkedGroup = await isGroupAlreadyLinked(chatId);
 
@@ -318,7 +300,8 @@ bot.on("callback_query", async (callbackQuery) => {
   const userId = callbackQuery.from.id;
   const data = callbackQuery.data;
 
-  // Проверяем админские права
+  log.info(`Получен callback: ${data} от пользователя ${userId} в чате ${chatId}`);
+
   const userIsAdmin = await isUserAdmin(chatId, userId);
   if (!userIsAdmin) {
     return bot.answerCallbackQuery(callbackQuery.id, {
@@ -327,11 +310,9 @@ bot.on("callback_query", async (callbackQuery) => {
     });
   }
 
-  // Обработка кнопки "Прикрепить группу"
   if (data === "attach_group") {
     const groups = await getAllGroups();
 
-    // Формируем клавиатуру с группами
     const keyboard = {
       inline_keyboard: groups.map((group) => [
         {
@@ -341,12 +322,10 @@ bot.on("callback_query", async (callbackQuery) => {
       ]),
     };
 
-    // Добавляем кнопку "Создать новую группу"
     keyboard.inline_keyboard.push([
       { text: "➕ Создать новую группу", callback_data: "create_new" },
     ]);
 
-    // Добавляем кнопку "Отмена"
     keyboard.inline_keyboard.push([
       { text: "❌ Отмена", callback_data: "cancel" },
     ]);
@@ -365,17 +344,14 @@ bot.on("callback_query", async (callbackQuery) => {
     });
   }
 
-  // Обработка создания новой группы
   else if (data === "create_new") {
     bot.answerCallbackQuery(callbackQuery.id, {
       text: "Создаем новую группу...",
     });
 
-    // Получаем информацию о чате
     const chat = await bot.getChat(chatId);
     const chatTitle = chat.title || "Новая группа";
 
-    // Создаем и привязываем новую группу
     const result = await createAndLinkNewGroup(chatId, chatTitle);
 
     if (result.success) {
@@ -395,7 +371,6 @@ bot.on("callback_query", async (callbackQuery) => {
     }
   }
 
-  // Обработка выбора группы
   else if (data.startsWith("select_")) {
     const groupId = data.replace("select_", "");
 
@@ -416,7 +391,6 @@ bot.on("callback_query", async (callbackQuery) => {
     }
   }
 
-  // Обработка отмены
   else if (data === "cancel") {
     bot.answerCallbackQuery(callbackQuery.id);
     bot.editMessageText("❌ Операция отменена.", {
@@ -428,7 +402,6 @@ bot.on("callback_query", async (callbackQuery) => {
 
 async function sendExamNotification(exam) {
   try {
-    // Получаем группу, к которой привязан экзамен
     const group = await Group.findById(exam.group);
 
     if (!group) {
@@ -441,7 +414,6 @@ async function sendExamNotification(exam) {
       return { success: false, message: "Группа не привязана к Telegram" };
     }
 
-    // Формируем сообщение
     const examName = exam.examTitle || "Новый экзамен";
     const deadline = exam.examEnd
       ? new Date(exam.examEnd).toLocaleString("ru-RU")
@@ -459,7 +431,6 @@ async function sendExamNotification(exam) {
 
     message += `\n✅ Удачи на экзамене!`;
 
-    // Отправляем сообщение
     await bot.sendMessage(group.telegramId, message, {
       parse_mode: "Markdown",
       disable_web_page_preview: false,
@@ -481,6 +452,7 @@ async function sendExamNotification(exam) {
 
 // Endpoint для получения обновлений от Telegram
 app.post(`/bot${BOT_TOKEN}`, (req, res) => {
+  log.info(`Получен webhook запрос: ${JSON.stringify(req.body)}`);
   bot.processUpdate(req.body);
   res.sendStatus(200);
 });
@@ -488,6 +460,16 @@ app.post(`/bot${BOT_TOKEN}`, (req, res) => {
 // Health check endpoint
 app.get("/health", (req, res) => {
   res.json({ status: "OK", timestamp: new Date().toISOString() });
+});
+
+// Endpoint для проверки webhook
+app.get("/webhook-info", async (req, res) => {
+  try {
+    const info = await bot.getWebHookInfo();
+    res.json(info);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Корневой маршрут
@@ -506,21 +488,36 @@ async function initBot() {
     log.info(`ID бота: ${botInfo.id}`);
     log.info(`Имя бота: ${botInfo.first_name}`);
 
-    // Устанавливаем webhook
-    if (WEBHOOK_URL) {
-      await bot.setWebHook(`${WEBHOOK_URL}/bot${BOT_TOKEN}`);
-      const webhookInfo = await bot.getWebHookInfo();
-      log.success(`Webhook установлен: ${webhookInfo.url}`);
-      log.info(`Pending updates: ${webhookInfo.pending_update_count}`);
-    } else {
+    if (!WEBHOOK_URL) {
       log.error("WEBHOOK_URL не установлен в переменных окружения!");
+      log.info("Используйте ngrok или другой туннель для локальной разработки");
+      log.info("Например: WEBHOOK_URL=https://your-domain.ngrok.io");
       process.exit(1);
+    }
+
+    // Сначала удаляем старый webhook
+    await bot.deleteWebHook();
+    log.info("Старый webhook удален");
+
+    // Устанавливаем новый webhook
+    const webhookPath = `${WEBHOOK_URL}/bot${BOT_TOKEN}`;
+    await bot.setWebHook(webhookPath);
+    
+    const webhookInfo = await bot.getWebHookInfo();
+    log.success(`Webhook установлен: ${webhookInfo.url}`);
+    log.info(`Pending updates: ${webhookInfo.pending_update_count}`);
+    
+    if (webhookInfo.last_error_date) {
+      log.error(`Последняя ошибка webhook: ${webhookInfo.last_error_message}`);
+      log.error(`Дата ошибки: ${new Date(webhookInfo.last_error_date * 1000).toISOString()}`);
     }
 
     // Запускаем Express сервер
     app.listen(PORT, () => {
       log.success(`Express сервер запущен на порту ${PORT}`);
-      log.info(`Webhook endpoint: /bot${BOT_TOKEN}`);
+      log.info(`Webhook endpoint: POST ${webhookPath}`);
+      log.info(`Health check: GET http://localhost:${PORT}/health`);
+      log.info(`Webhook info: GET http://localhost:${PORT}/webhook-info`);
     });
   } catch (error) {
     log.error("Ошибка инициализации бота:", error);
