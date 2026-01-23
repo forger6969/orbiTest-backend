@@ -7,7 +7,7 @@ const Group = require("../groups/group.model");
 const Exam = require("../exams/exam.model");
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const WEBHOOK_URL = process.env.WEBHOOK_URL; 
+const WEBHOOK_URL = process.env.WEBHOOK_URL;
 const PORT = process.env.PORT || 3000;
 
 // Создаем бота БЕЗ polling
@@ -154,7 +154,9 @@ async function createAndLinkNewGroup(chatId, chatTitle) {
 }
 
 const getStudentsThisGroup = async (chatid) => {
-  const group = await Group.findOne({ telegramId: chatid }).populate("students");
+  const group = await Group.findOne({ telegramId: chatid }).populate(
+    "students",
+  );
   return group.students;
 };
 
@@ -167,7 +169,9 @@ bot.onText(/\/start/, async (msg) => {
   const userId = msg.from.id;
   const chatType = msg.chat.type;
 
-  log.info(`Получена команда /start от пользователя ${userId} в чате ${chatId}`);
+  log.info(
+    `Получена команда /start от пользователя ${userId} в чате ${chatId}`,
+  );
 
   if (!["group", "supergroup"].includes(chatType)) {
     return bot.sendMessage(
@@ -244,17 +248,19 @@ bot.onText(/\/students/, async (msg) => {
 
   try {
     const students = await getStudentsThisGroup(chatId);
-    
+
     if (!students || students.length === 0) {
       return bot.sendMessage(chatId, "📋 В этой группе пока нет студентов.");
     }
 
-    const message = "👥 *Студенты группы:*\n\n" + students
-      .map(
-        (student, index) =>
-          `${index + 1}. ${student.firstName} ${student.lastName} (${student.email})`,
-      )
-      .join("\n");
+    const message =
+      "👥 *Студенты группы:*\n\n" +
+      students
+        .map(
+          (student, index) =>
+            `${index + 1}. ${student.firstName} ${student.lastName} (${student.email})`,
+        )
+        .join("\n");
 
     bot.sendMessage(chatId, message, { parse_mode: "Markdown" });
   } catch (error) {
@@ -300,7 +306,9 @@ bot.on("callback_query", async (callbackQuery) => {
   const userId = callbackQuery.from.id;
   const data = callbackQuery.data;
 
-  log.info(`Получен callback: ${data} от пользователя ${userId} в чате ${chatId}`);
+  log.info(
+    `Получен callback: ${data} от пользователя ${userId} в чате ${chatId}`,
+  );
 
   const userIsAdmin = await isUserAdmin(chatId, userId);
   if (!userIsAdmin) {
@@ -342,9 +350,7 @@ bot.on("callback_query", async (callbackQuery) => {
       message_id: msg.message_id,
       reply_markup: keyboard,
     });
-  }
-
-  else if (data === "create_new") {
+  } else if (data === "create_new") {
     bot.answerCallbackQuery(callbackQuery.id, {
       text: "Создаем новую группу...",
     });
@@ -369,9 +375,7 @@ bot.on("callback_query", async (callbackQuery) => {
         message_id: msg.message_id,
       });
     }
-  }
-
-  else if (data.startsWith("select_")) {
+  } else if (data.startsWith("select_")) {
     const groupId = data.replace("select_", "");
 
     const result = await linkGroupToTelegram(groupId, chatId);
@@ -389,9 +393,7 @@ bot.on("callback_query", async (callbackQuery) => {
         message_id: msg.message_id,
       });
     }
-  }
-
-  else if (data === "cancel") {
+  } else if (data === "cancel") {
     bot.answerCallbackQuery(callbackQuery.id);
     bot.editMessageText("❌ Операция отменена.", {
       chat_id: chatId,
@@ -459,7 +461,7 @@ app.post(`/bot${BOT_TOKEN}`, (req, res) => {
 
 // Health check endpoint
 app.get("/health", (req, res) => {
-  res.json({ status: "OK", timestamp: new Date().toISOString() });
+  res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
 // Endpoint для проверки webhook
@@ -502,14 +504,16 @@ async function initBot() {
     // Устанавливаем новый webhook
     const webhookPath = `${WEBHOOK_URL}/bot${BOT_TOKEN}`;
     await bot.setWebHook(webhookPath);
-    
+
     const webhookInfo = await bot.getWebHookInfo();
     log.success(`Webhook установлен: ${webhookInfo.url}`);
     log.info(`Pending updates: ${webhookInfo.pending_update_count}`);
-    
+
     if (webhookInfo.last_error_date) {
       log.error(`Последняя ошибка webhook: ${webhookInfo.last_error_message}`);
-      log.error(`Дата ошибки: ${new Date(webhookInfo.last_error_date * 1000).toISOString()}`);
+      log.error(
+        `Дата ошибки: ${new Date(webhookInfo.last_error_date * 1000).toISOString()}`,
+      );
     }
 
     // Запускаем Express сервер
@@ -549,7 +553,6 @@ process.on("SIGTERM", async () => {
     process.exit(1);
   }
 });
-
 
 // Запускаем бота при импорте
 initBot();
