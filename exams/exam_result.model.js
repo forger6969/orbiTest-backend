@@ -12,6 +12,13 @@ const resultSchema = mongoose.Schema(
       default: "pending",
     },
     score: { type: Number, default: 0 },
+    requirements: [
+      {
+        requirement: { type: String, required: true },
+        score: { type: Number, required: true, min: 1, max: 10 },
+        isDone:{type:Boolean , default:false}
+      },
+    ],
   },
   {
     timestamps: true,

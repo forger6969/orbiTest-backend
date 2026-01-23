@@ -1,13 +1,21 @@
-// bot.js - Telegram бот для OrbiTest
+// bot.js - Telegram бот для OrbiTest (Webhook режим)
 require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
+const express = require("express");
 const mongoose = require("mongoose");
 const Group = require("../groups/group.model");
 const Exam = require("../exams/exam.model");
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const WEBHOOK_URL = process.env.WEBHOOK_URL; 
+const PORT = process.env.PORT || 3000;
 
-const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+// Создаем бота БЕЗ polling
+const bot = new TelegramBot(BOT_TOKEN, { polling: false });
+
+// Создаем Express сервер для webhook
+const app = express();
+app.use(express.json());
 
 const log = {
   info: (msg) => console.log(`[INFO] ${new Date().toISOString()} - ${msg}`),
@@ -167,7 +175,6 @@ async function createAndLinkNewGroup(chatId, chatTitle) {
 
 const getStudentsThisGroup = async (chatid) => {
   const group = await Group.findOne({ telegramId: chatid }).populate("students");
-
   return group.students;
 };
 
@@ -269,9 +276,7 @@ bot.onText(/\/students/, async (msg) => {
     )
     .join("\n");
 
-  bot.sendMessage(chatId , 
-    message
-  );
+  bot.sendMessage(chatId, message);
 });
 
 /**
@@ -470,25 +475,83 @@ async function sendExamNotification(exam) {
   }
 }
 
-bot.on("polling_error", (error) => {
-  log.error("Ошибка polling:", error);
+// ============================================
+// WEBHOOK ENDPOINTS
+// ============================================
+
+// Endpoint для получения обновлений от Telegram
+app.post(`/bot${BOT_TOKEN}`, (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
 });
 
-bot.on("error", (error) => {
-  log.error("Ошибка бота:", error);
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ status: "OK", timestamp: new Date().toISOString() });
 });
+
+// Корневой маршрут
+app.get("/", (req, res) => {
+  res.send("OrbiTest Telegram Bot is running on webhook mode");
+});
+
+// ============================================
+// ИНИЦИАЛИЗАЦИЯ БОТА И СЕРВЕРА
+// ============================================
 
 async function initBot() {
   try {
     const botInfo = await bot.getMe();
-    log.success(`Бот @${botInfo.username} успешно запущен!`);
+    log.success(`Бот @${botInfo.username} инициализирован!`);
     log.info(`ID бота: ${botInfo.id}`);
     log.info(`Имя бота: ${botInfo.first_name}`);
+
+    // Устанавливаем webhook
+    if (WEBHOOK_URL) {
+      await bot.setWebHook(`${WEBHOOK_URL}/bot${BOT_TOKEN}`);
+      const webhookInfo = await bot.getWebHookInfo();
+      log.success(`Webhook установлен: ${webhookInfo.url}`);
+      log.info(`Pending updates: ${webhookInfo.pending_update_count}`);
+    } else {
+      log.error("WEBHOOK_URL не установлен в переменных окружения!");
+      process.exit(1);
+    }
+
+    // Запускаем Express сервер
+    app.listen(PORT, () => {
+      log.success(`Express сервер запущен на порту ${PORT}`);
+      log.info(`Webhook endpoint: /bot${BOT_TOKEN}`);
+    });
   } catch (error) {
     log.error("Ошибка инициализации бота:", error);
     process.exit(1);
   }
 }
+
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  log.info("Получен сигнал SIGINT. Останавливаем бота...");
+  try {
+    await bot.deleteWebHook();
+    log.success("Webhook удален");
+    process.exit(0);
+  } catch (error) {
+    log.error("Ошибка при удалении webhook:", error);
+    process.exit(1);
+  }
+});
+
+process.on("SIGTERM", async () => {
+  log.info("Получен сигнал SIGTERM. Останавливаем бота...");
+  try {
+    await bot.deleteWebHook();
+    log.success("Webhook удален");
+    process.exit(0);
+  } catch (error) {
+    log.error("Ошибка при удалении webhook:", error);
+    process.exit(1);
+  }
+});
 
 // Запускаем бота при импорте
 initBot();
@@ -498,4 +561,5 @@ module.exports = {
   sendExamNotification,
   initBot,
   createAndLinkNewGroup,
+  app,
 };

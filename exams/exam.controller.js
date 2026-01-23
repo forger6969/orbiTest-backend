@@ -71,9 +71,40 @@ const getAllExams = async (req, res) => {
 const addResult = async (req, res) => {
   try {
     const { projectLink, describe, examId } = req.body;
+    const {id} = req.user
 
     if (!projectLink || !examId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "add required fields" });
     }
+
+    const exam = await Exam.findById(examId);
+
+    if (!exam) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Exam not found" });
+    }
+
+    if (exam.status === "completed") {
+      return res
+        .status(410)
+        .json({ success: false, message: "the exam is already over" });
+    }
+
+    const result = new examResult({
+      projectLink,
+      examId,
+      describe: describe ? describe : null,
+      user:id,
+      requirements: exam.requirements
+    });
+
+    await result.save()
+
+    res.json({success:true , result})
+
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
