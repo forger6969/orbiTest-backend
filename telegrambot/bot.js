@@ -460,10 +460,12 @@ async function sendExamNotification(exam) {
 // WEBHOOK ENDPOINTS
 // ============================================
 
-// ИСПРАВЛЕНО: webhook path без encodeURIComponent
+// ИСПРАВЛЕНО: Telegram сам кодирует URL, поэтому создаем оба роута
 const webhookPath = `/bot${BOT_TOKEN}`;
+const webhookPathEncoded = `/bot/${encodeURIComponent(BOT_TOKEN)}`;
 
-app.post(webhookPath, (req, res) => {
+// Обработчик для обоих вариантов URL
+const webhookHandler = (req, res) => {
   try {
     log.info(`Получен webhook запрос от Telegram`);
     bot.processUpdate(req.body);
@@ -472,7 +474,11 @@ app.post(webhookPath, (req, res) => {
     log.error("Ошибка обработки webhook:", error);
     res.sendStatus(500);
   }
-});
+};
+
+// Регистрируем оба роута
+app.post(webhookPath, webhookHandler);
+app.post(webhookPathEncoded, webhookHandler);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -520,13 +526,17 @@ async function initBot() {
     await bot.deleteWebHook({ drop_pending_updates: true });
     log.info("Старый webhook удален, pending updates очищены");
 
-    // ИСПРАВЛЕНО: правильный URL без лишнего кодирования
+    // ВАЖНО: Устанавливаем webhook БЕЗ кодирования, Telegram сам закодирует
     const fullWebhookUrl = `${WEBHOOK_URL}${webhookPath}`;
     await bot.setWebHook(fullWebhookUrl);
 
     const webhookInfo = await bot.getWebHookInfo();
     log.success(`Webhook установлен: ${webhookInfo.url}`);
     log.info(`Pending updates: ${webhookInfo.pending_update_count}`);
+    
+    // Проверяем, что роут существует
+    log.info(`Telegram будет отправлять запросы на: ${webhookInfo.url}`);
+    log.info(`Express слушает на: ${webhookPath} И ${webhookPathEncoded}`);
 
     if (webhookInfo.last_error_date) {
       log.error(`Последняя ошибка webhook: ${webhookInfo.last_error_message}`);
