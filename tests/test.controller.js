@@ -112,7 +112,6 @@ const addResult = async (req, res) => {
 
     const procent = (score / test.maxScore) * 100;
 
-    // Сохраняем результат
     const result = new Result({
       user: userId,
       test: testId,
@@ -122,17 +121,17 @@ const addResult = async (req, res) => {
     });
     await result.save();
 
-    // Создаем уведомление о завершении теста
+// user ga notifcation jonatish test tugaganda (websocket)
     await sendToUser(userId, {
       title: "Тест завершён 🎉",
       text: `Результат: ${Math.round(procent)}%`,
       notifyType: "success",
     });
 
-    user.testsHistory.push(result)
-    await user.save()
+    user.testsHistory.push(result);
+    await user.save();
 
-    // Если успех >= 85%, повышаем опыт и ранг
+    // agar ogan testdan otgani 85 fozidan kotta bosa gradeexprence ga test qancha expirence bersa qoshiladi
     if (procent >= 85) {
       user.gradeExperience += test.gradeExperience || 0;
 
@@ -183,17 +182,14 @@ const getResults = async (req, res) => {
   }
 };
 
-const getAllTypesTest = async (req ,res)=>{
+const getAllTypesTest = async (req, res) => {
   try {
-    
-    const types = await Test.distinct("testType")
-    res.json({types , count:types.length})
-
+    const types = await Test.distinct("testType");
+    res.json({ types, count: types.length });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
-    
   }
-}
+};
 
 module.exports = {
   createNewTest,
@@ -201,5 +197,5 @@ module.exports = {
   getTestById,
   addResult,
   getResults,
-  getAllTypesTest
+  getAllTypesTest,
 };

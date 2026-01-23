@@ -5,26 +5,17 @@ const mongoose = require('mongoose');
 const Group = require('../groups/group.model');
 const Exam = require('../exams/exam.model');
 
-// Конфигурация
+
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN 
 
-// Создаём бота
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-// Логирование
 const log = {
   info: (msg) => console.log(`[INFO] ${new Date().toISOString()} - ${msg}`),
   error: (msg, err) => console.error(`[ERROR] ${new Date().toISOString()} - ${msg}`, err),
   success: (msg) => console.log(`[SUCCESS] ${new Date().toISOString()} - ${msg}`)
 };
 
-// ============================================
-// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-// ============================================
-
-/**
- * Проверяет, является ли пользователь администратором группы
- */
 async function isUserAdmin(chatId, userId) {
   try {
     const member = await bot.getChatMember(chatId, userId);
@@ -411,15 +402,7 @@ bot.on('callback_query', async (callbackQuery) => {
   }
 });
 
-// ============================================
-// ФУНКЦИЯ ОТПРАВКИ УВЕДОМЛЕНИЙ О ЭКЗАМЕНЕ
-// ============================================
 
-/**
- * Отправляет уведомление о начале экзамена в привязанную Telegram группу
- * 
- * @param {Object} exam - Объект экзамена из MongoDB
- */
 async function sendExamNotification(exam) {
   try {
     // Получаем группу, к которой привязан экзамен
@@ -468,9 +451,6 @@ async function sendExamNotification(exam) {
   }
 }
 
-// ============================================
-// ОБРАБОТКА ОШИБОК
-// ============================================
 
 bot.on('polling_error', (error) => {
   log.error('Ошибка polling:', error);
@@ -480,13 +460,6 @@ bot.on('error', (error) => {
   log.error('Ошибка бота:', error);
 });
 
-// ============================================
-// ЭКСПОРТ И ЗАПУСК
-// ============================================
-
-/**
- * Инициализация бота
- */
 async function initBot() {
   try {
     const botInfo = await bot.getMe();
@@ -502,7 +475,6 @@ async function initBot() {
 // Запускаем бота при импорте
 initBot();
 
-// Экспортируем функции для использования в основном приложении
 module.exports = {
   bot,
   sendExamNotification,

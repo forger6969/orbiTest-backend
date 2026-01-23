@@ -34,7 +34,7 @@ const createExam = async (req, res) => {
         success: false,
         message: "Дата окончания экзамена должна быть после начала",
       });
-    }
+    }pending
 
   
     const findGroup = await Group.findById(group);
@@ -72,6 +72,20 @@ const getAllExams = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+const addResult = async (req, res) => {
+  try {
+    
+    const {projectLink , describe , examId} = req.body
+
+    if (!projectLink || !examId) {
+      
+    }
+
+  } catch (err) {
+    res.status(500).json({success:false , message:err.message})
+  }
+}
 
 module.exports = {
   createExam,
