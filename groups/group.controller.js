@@ -1,3 +1,4 @@
+const { bot } = require("../telegrambot/bot");
 const { User } = require("../user/user.model");
 const Group = require("./group.model");
 
@@ -39,26 +40,54 @@ const addStudentToGroup = async (req, res) => {
         .json({ success: false, message: "user not found" });
     }
 
-    const updatedGroup = await Group.findByIdAndUpdate(
-      groupId,
-      {
-        $addToSet: { students: studentId },
-      },
-      {
-        new: true,
-      },
-    );
+    // const updatedGroup = await Group.findByIdAndUpdate(
+    //   groupId,
+    //   {
+    //     $addToSet: { students: studentId },
+    //   },
+    //   {
+    //     new: true,
+    //   },
+    // );
 
-    if (!updatedGroup) {
+    const group = await Group.findById(groupId);
+
+    if (!group) {
       return res
         .status(404)
         .json({ success: false, message: "group not found" });
     }
 
+    // grouppani studentlariini ichidan hozir qoshilmoqchi bolgan user ni find qilish
+    const findUserInGroup = group.students.find(
+      (f) => f.toString() === studentId,
+    );
+
+    // agar group da bu student uje bosa qosholmidigan qilish
+    if (findUserInGroup) {
+      return res.status(400).json({
+        success: false,
+        message: "Student bu gruppaga allaqachon qoshilgan",
+      });
+    }
+
+    // agar bu student hali bu gruppada bomasa user ni group ga qoshish
+    group.students.push(studentId);
+    await group.save();
+
     user.groupID = groupId;
     await user.save();
 
-    res.json({ success: true, updatedGroup });
+    res.json({ success: true, group });
+// agar grouppani telegrami bosa shu telegram grouppaga message jonatish
+    if (group.telegramId) {
+      bot.sendMessage(
+        group.telegramId,
+        `👤Sizni guruhingizga yangi student qoshildi\nIsm:${user.firstName}\nFamiliya:${user.lastName}
+        `,
+        { parse_mode: "Markdown" },
+      );
+    }
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

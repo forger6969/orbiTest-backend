@@ -8,19 +8,16 @@ const createExam = async (req, res) => {
     const { examTitle, requirements, examDescribe, examStart, examEnd, group } =
       req.body;
 
-
     if (!examTitle || !requirements || !examStart || !examEnd || !group) {
       return res
         .status(400)
         .json({ success: false, message: "Add required fields" });
     }
 
-    // Конвертируем строки в даты
     const startDate = new Date(examStart);
     const endDate = new Date(examEnd);
     const now = new Date();
 
-    // Проверка: нельзя создать экзамен в прошлом
     if (startDate < now) {
       return res.status(400).json({
         success: false,
@@ -28,22 +25,20 @@ const createExam = async (req, res) => {
       });
     }
 
-    // Проверка: дата окончания должна быть после начала
     if (endDate <= startDate) {
       return res.status(400).json({
         success: false,
         message: "Дата окончания экзамена должна быть после начала",
       });
-    }pending
+    }
+    // pending;
 
-  
     const findGroup = await Group.findById(group);
     if (!findGroup) {
       return res
         .status(404)
         .json({ success: false, message: "Group is not found" });
     }
-
 
     const exam = new Exam({
       examTitle,
@@ -75,17 +70,14 @@ const getAllExams = async (req, res) => {
 
 const addResult = async (req, res) => {
   try {
-    
-    const {projectLink , describe , examId} = req.body
+    const { projectLink, describe, examId } = req.body;
 
     if (!projectLink || !examId) {
-      
     }
-
   } catch (err) {
-    res.status(500).json({success:false , message:err.message})
+    res.status(500).json({ success: false, message: err.message });
   }
-}
+};
 
 module.exports = {
   createExam,

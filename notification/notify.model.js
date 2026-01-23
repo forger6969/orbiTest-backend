@@ -12,7 +12,7 @@ const notifySchema = mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now,
-    expires: 60 * 60 * 24 * 2, 
+    expires: 60 * 60 * 24 * 2,
   },
 });
 

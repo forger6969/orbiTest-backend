@@ -20,7 +20,6 @@ const examSchema = new Schema(
     isEnd: { type: Boolean, default: false },
     group: { type: Schema.Types.ObjectId, ref: "Group", required: true },
     
-    // ⭐ ЕДИНСТВЕННОЕ НОВОЕ ПОЛЕ для работы Agenda
     lastReminderSent: { type: Date, default: null }
   },
   {
