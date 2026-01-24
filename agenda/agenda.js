@@ -309,7 +309,7 @@ async function startAgenda() {
 }
 
 /**
- * Корректное завершение работы
+ * Корректное завершение работы (только для локальной разработки)
  */
 async function gracefulShutdown() {
   log.info('Получен сигнал завершения, останавливаем Agenda...');
@@ -317,25 +317,31 @@ async function gracefulShutdown() {
   try {
     await agenda.stop();
     log.success('Agenda успешно остановлена');
-    process.exit(0);
+    // НЕ ВЫЗЫВАЕМ process.exit() - пусть основной процесс управляет
   } catch (error) {
     log.error('Ошибка при остановке Agenda:', error);
-    process.exit(1);
   }
 }
 
-// Обработка сигналов завершения
-process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
+// ============================================
+// ОБРАБОТЧИКИ СИГНАЛОВ - ОТКЛЮЧЕНО ДЛЯ PRODUCTION
+// ============================================
 
-// Обработка необработанных ошибок
+// ВАЖНО: На Render эти обработчики вызывают проблемы
+// Закомментировано для production, раскомментируйте для локальной разработки
+
+// process.on('SIGTERM', gracefulShutdown);
+// process.on('SIGINT', gracefulShutdown);
+
+// Обработка необработанных ошибок (оставляем только логи, без остановки)
 process.on('unhandledRejection', (reason, promise) => {
   log.error('Необработанное отклонение промиса:', reason);
+  // НЕ вызываем process.exit() или gracefulShutdown()
 });
 
 process.on('uncaughtException', (error) => {
   log.error('Необработанное исключение:', error);
-  gracefulShutdown();
+  // НЕ вызываем gracefulShutdown()
 });
 
 // ============================================
