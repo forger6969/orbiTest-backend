@@ -578,7 +578,4 @@ module.exports = {
   app,
 };
 
-// Запуск
-if (require.main === module) {
   initBot();
-}
