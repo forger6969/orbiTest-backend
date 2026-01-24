@@ -1,4 +1,4 @@
-// bot.js - Telegram бот для OrbiTest (Webhook режим) - ИСПРАВЛЕНО ДЛЯ RENDER
+// bot.js - Telegram бот для OrbiTest (Webhook режим) - ИСПРАВЛЕНО
 require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
@@ -21,10 +21,12 @@ const log = {
 const app = express();
 app.use(express.json());
 
-// Бот БЕЗ polling
-const bot = new TelegramBot(BOT_TOKEN, { polling: false });
+// Бот БЕЗ polling - ВАЖНО: webHook: true
+const bot = new TelegramBot(BOT_TOKEN, { 
+  polling: false,
+  webHook: true
+});
 
-// ПРОСТОЙ ПУТЬ БЕЗ СПЕЦИАЛЬНЫХ СИМВОЛОВ
 const webhookPath = "/telegram-webhook";
 
 // ============================================
@@ -180,9 +182,7 @@ bot.onText(/\/start/, async (msg) => {
   const userId = msg.from.id;
   const chatType = msg.chat.type;
 
-  log.info(
-    `Команда /start от пользователя ${userId} в чате ${chatId}`
-  );
+  log.info(`Команда /start от пользователя ${userId} в чате ${chatId}`);
 
   if (!["group", "supergroup"].includes(chatType)) {
     return bot.sendMessage(
@@ -461,11 +461,15 @@ async function sendExamNotification(exam) {
 // WEBHOOK ENDPOINTS
 // ============================================
 
-// Единственный обработчик webhook
+// ИСПРАВЛЕННЫЙ обработчик webhook
 app.post(webhookPath, (req, res) => {
   try {
     log.info("Webhook получен от Telegram");
+    log.info(`Update: ${JSON.stringify(req.body)}`);
+    
+    // Передаем обновление боту
     bot.processUpdate(req.body);
+    
     res.sendStatus(200);
   } catch (error) {
     log.error("Ошибка обработки webhook:", error);
@@ -503,6 +507,14 @@ app.get("/webhook-info", async (req, res) => {
 
 async function initBot() {
   try {
+    // СНАЧАЛА запускаем сервер
+    await new Promise((resolve) => {
+      app.listen(PORT, "0.0.0.0", () => {
+        log.success(`Сервер запущен на порту ${PORT}`);
+        resolve();
+      });
+    });
+
     const botInfo = await bot.getMe();
     log.success(`Бот @${botInfo.username} инициализирован`);
     log.info(`ID: ${botInfo.id}`);
@@ -516,10 +528,17 @@ async function initBot() {
     await bot.deleteWebHook({ drop_pending_updates: true });
     log.info("Старый webhook удален");
 
+    // Небольшая задержка
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
     // Устанавливаем новый webhook
     const webhookUrl = `${WEBHOOK_URL}${webhookPath}`;
-    await bot.setWebHook(webhookUrl);
+    await bot.setWebHook(webhookUrl, {
+      drop_pending_updates: true,
+      allowed_updates: ["message", "callback_query"]
+    });
 
+    // Проверяем webhook
     const webhookInfo = await bot.getWebHookInfo();
     log.success(`Webhook установлен: ${webhookInfo.url}`);
     log.info(`Pending updates: ${webhookInfo.pending_update_count}`);
@@ -531,19 +550,15 @@ async function initBot() {
       );
     }
 
-    // Запускаем сервер на 0.0.0.0 для Render
-    app.listen(PORT, "0.0.0.0", () => {
-      log.success(`Сервер запущен на порту ${PORT}`);
-      log.info(`Webhook: ${webhookUrl}`);
-      log.info(`Health: /health`);
-    });
+    log.info(`Webhook: ${webhookUrl}`);
+    log.info(`Health: /health`);
   } catch (error) {
     log.error("Ошибка инициализации:", error);
     process.exit(1);
   }
 }
 
-// Graceful shutdown - УПРОЩЕННЫЙ
+// Graceful shutdown
 process.on("SIGINT", async () => {
   log.info("SIGINT получен, останавливаем...");
   process.exit(0);
@@ -564,4 +579,6 @@ module.exports = {
 };
 
 // Запуск
-initBot();
+if (require.main === module) {
+  initBot();
+}
