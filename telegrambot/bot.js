@@ -1,14 +1,13 @@
-// bot.js - Telegram бот для OrbiTest (Webhook режим)
+// bot.js - Telegram бот для OrbiTest (Webhook режим) - ИСПРАВЛЕНО ДЛЯ RENDER
 require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
-const mongoose = require("mongoose");
 const Group = require("../groups/group.model");
 const Exam = require("../exams/exam.model");
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 const log = {
   info: (msg) => console.log(`[INFO] ${new Date().toISOString()} - ${msg}`),
@@ -18,12 +17,15 @@ const log = {
     console.log(`[SUCCESS] ${new Date().toISOString()} - ${msg}`),
 };
 
-// Создаем Express сервер для webhook ПЕРЕД созданием бота
+// Express сервер
 const app = express();
 app.use(express.json());
 
-// Создаем бота БЕЗ polling
+// Бот БЕЗ polling
 const bot = new TelegramBot(BOT_TOKEN, { polling: false });
+
+// ПРОСТОЙ ПУТЬ БЕЗ СПЕЦИАЛЬНЫХ СИМВОЛОВ
+const webhookPath = "/telegram-webhook";
 
 // ============================================
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -89,7 +91,7 @@ async function linkGroupToTelegram(groupId, chatId) {
     await group.save();
 
     log.success(
-      `Группа ${group.groupName} успешно привязана к Telegram чату ${chatId}`,
+      `Группа ${group.groupName} успешно привязана к Telegram чату ${chatId}`
     );
 
     return {
@@ -139,7 +141,7 @@ async function createAndLinkNewGroup(chatId, chatTitle) {
     await newGroup.save();
 
     log.success(
-      `Создана новая группа: ${chatTitle} и привязана к Telegram чату ${chatId}`,
+      `Создана новая группа: ${chatTitle} и привязана к Telegram чату ${chatId}`
     );
 
     return {
@@ -157,12 +159,17 @@ async function createAndLinkNewGroup(chatId, chatTitle) {
   }
 }
 
-const getStudentsThisGroup = async (chatid) => {
-  const group = await Group.findOne({ telegramId: chatid }).populate(
-    "students",
-  );
-  return group?.students || [];
-};
+async function getStudentsThisGroup(chatid) {
+  try {
+    const group = await Group.findOne({ telegramId: chatid }).populate(
+      "students"
+    );
+    return group?.students || [];
+  } catch (error) {
+    log.error("Ошибка получения студентов:", error);
+    return [];
+  }
+}
 
 // ============================================
 // ОБРАБОТЧИКИ КОМАНД
@@ -174,13 +181,13 @@ bot.onText(/\/start/, async (msg) => {
   const chatType = msg.chat.type;
 
   log.info(
-    `Получена команда /start от пользователя ${userId} в чате ${chatId}`,
+    `Команда /start от пользователя ${userId} в чате ${chatId}`
   );
 
   if (!["group", "supergroup"].includes(chatType)) {
     return bot.sendMessage(
       chatId,
-      "❌ Эта команда работает только в группах.\n\nДобавьте бота в группу и сделайте его администратором.",
+      "❌ Эта команда работает только в группах.\n\nДобавьте бота в группу и сделайте его администратором."
     );
   }
 
@@ -188,7 +195,7 @@ bot.onText(/\/start/, async (msg) => {
   if (!userIsAdmin) {
     return bot.sendMessage(
       chatId,
-      "⛔️ Только администраторы группы могут выполнять эту команду.",
+      "⛔️ Только администраторы группы могут выполнять эту команду."
     );
   }
 
@@ -196,7 +203,7 @@ bot.onText(/\/start/, async (msg) => {
   if (!botIsAdmin) {
     return bot.sendMessage(
       chatId,
-      "⚠️ Бот должен быть администратором группы для корректной работы.\n\nПожалуйста, назначьте бота администратором.",
+      "⚠️ Бот должен быть администратором группы для корректной работы.\n\nПожалуйста, назначьте бота администратором."
     );
   }
 
@@ -204,8 +211,7 @@ bot.onText(/\/start/, async (msg) => {
   if (linkedGroup) {
     return bot.sendMessage(
       chatId,
-      `✅ Эта Telegram группа уже подключена к OrbiTest группе: "${linkedGroup.groupName}"\n\n` +
-        `Вы будете получать уведомления о новых экзаменах.`,
+      `✅ Эта Telegram группа уже подключена к OrbiTest группе: "${linkedGroup.groupName}"\n\nВы будете получать уведомления о новых экзаменах.`
     );
   }
 
@@ -217,15 +223,14 @@ bot.onText(/\/start/, async (msg) => {
 
   bot.sendMessage(
     chatId,
-    "👋 Добро пожаловать в OrbiTest!\n\n" +
-      "Нажмите кнопку ниже, чтобы привязать эту Telegram группу к группе студентов в системе OrbiTest.",
-    { reply_markup: keyboard },
+    "👋 Добро пожаловать в OrbiTest!\n\nНажмите кнопку ниже, чтобы привязать эту Telegram группу к группе студентов в системе OrbiTest.",
+    { reply_markup: keyboard }
   );
 });
 
 bot.onText(/\/help/, (msg) => {
   const chatId = msg.chat.id;
-  log.info(`Получена команда /help в чате ${chatId}`);
+  log.info(`Команда /help в чате ${chatId}`);
 
   const helpText =
     "📚 *OrbiTest Bot - Помощь*\n\n" +
@@ -248,7 +253,7 @@ bot.onText(/\/help/, (msg) => {
 
 bot.onText(/\/students/, async (msg) => {
   const chatId = msg.chat.id;
-  log.info(`Получена команда /students в чате ${chatId}`);
+  log.info(`Команда /students в чате ${chatId}`);
 
   try {
     const students = await getStudentsThisGroup(chatId);
@@ -262,7 +267,7 @@ bot.onText(/\/students/, async (msg) => {
       students
         .map(
           (student, index) =>
-            `${index + 1}. ${student.firstName} ${student.lastName} (${student.email})`,
+            `${index + 1}. ${student.firstName} ${student.lastName} (${student.email})`
         )
         .join("\n");
 
@@ -275,7 +280,7 @@ bot.onText(/\/students/, async (msg) => {
 
 bot.onText(/\/status/, async (msg) => {
   const chatId = msg.chat.id;
-  log.info(`Получена команда /status в чате ${chatId}`);
+  log.info(`Команда /status в чате ${chatId}`);
 
   const linkedGroup = await isGroupAlreadyLinked(chatId);
 
@@ -287,7 +292,7 @@ bot.onText(/\/status/, async (msg) => {
         `📝 Описание: ${linkedGroup.groupDescribe || "Не указано"}\n` +
         `👥 Студентов: ${linkedGroup.students?.length || 0}\n\n` +
         `Вы будете получать уведомления о новых экзаменах.`,
-      { parse_mode: "Markdown" },
+      { parse_mode: "Markdown" }
     );
   } else {
     bot.sendMessage(
@@ -295,7 +300,7 @@ bot.onText(/\/status/, async (msg) => {
       "❌ *Статус: Не подключено*\n\n" +
         "Эта группа ещё не привязана к OrbiTest.\n" +
         "Используйте /start для настройки.",
-      { parse_mode: "Markdown" },
+      { parse_mode: "Markdown" }
     );
   }
 });
@@ -310,9 +315,7 @@ bot.on("callback_query", async (callbackQuery) => {
   const userId = callbackQuery.from.id;
   const data = callbackQuery.data;
 
-  log.info(
-    `Получен callback: ${data} от пользователя ${userId} в чате ${chatId}`,
-  );
+  log.info(`Callback: ${data} от пользователя ${userId} в чате ${chatId}`);
 
   const userIsAdmin = await isUserAdmin(chatId, userId);
   if (!userIsAdmin) {
@@ -446,12 +449,10 @@ async function sendExamNotification(exam) {
       disable_web_page_preview: false,
     });
 
-    log.success(
-      `Уведомление о экзамене отправлено в группу ${group.groupName}`,
-    );
+    log.success(`Уведомление отправлено в группу ${group.groupName}`);
     return { success: true, message: "Уведомление отправлено" };
   } catch (error) {
-    log.error("Ошибка отправки уведомления о экзамене:", error);
+    log.error("Ошибка отправки уведомления:", error);
     return { success: false, message: error.message };
   }
 }
@@ -460,36 +461,33 @@ async function sendExamNotification(exam) {
 // WEBHOOK ENDPOINTS
 // ============================================
 
-// ИСПРАВЛЕНО: Telegram сам кодирует URL, поэтому создаем оба роута
-const webhookPath = `/bot${BOT_TOKEN}`;
-const webhookPathEncoded = `/bot/${encodeURIComponent(BOT_TOKEN)}`;
-
-// Обработчик для обоих вариантов URL
-const webhookHandler = (req, res) => {
+// Единственный обработчик webhook
+app.post(webhookPath, (req, res) => {
   try {
-    log.info(`Получен webhook запрос от Telegram`);
+    log.info("Webhook получен от Telegram");
     bot.processUpdate(req.body);
     res.sendStatus(200);
   } catch (error) {
     log.error("Ошибка обработки webhook:", error);
     res.sendStatus(500);
   }
-};
+});
 
-// Регистрируем оба роута
-app.post(webhookPath, webhookHandler);
-app.post(webhookPathEncoded, webhookHandler);
+// Health check для Render
+app.get("/", (req, res) => {
+  res.send("OrbiTest Telegram Bot is running");
+});
 
-// Health check endpoint
 app.get("/health", (req, res) => {
-  res.status(200).json({ 
-    status: "OK", 
+  res.status(200).json({
+    status: "OK",
+    uptime: process.uptime(),
     timestamp: new Date().toISOString(),
-    bot: "active"
+    bot: "active",
   });
 });
 
-// Endpoint для проверки webhook
+// Информация о webhook
 app.get("/webhook-info", async (req, res) => {
   try {
     const info = await bot.getWebHookInfo();
@@ -499,11 +497,6 @@ app.get("/webhook-info", async (req, res) => {
   }
 });
 
-// Корневой маршрут
-app.get("/", (req, res) => {
-  res.send("OrbiTest Telegram Bot is running on webhook mode");
-});
-
 // ============================================
 // ИНИЦИАЛИЗАЦИЯ БОТА И СЕРВЕРА
 // ============================================
@@ -511,85 +504,57 @@ app.get("/", (req, res) => {
 async function initBot() {
   try {
     const botInfo = await bot.getMe();
-    log.success(`Бот @${botInfo.username} инициализирован!`);
-    log.info(`ID бота: ${botInfo.id}`);
-    log.info(`Имя бота: ${botInfo.first_name}`);
+    log.success(`Бот @${botInfo.username} инициализирован`);
+    log.info(`ID: ${botInfo.id}`);
 
     if (!WEBHOOK_URL) {
-      log.error("WEBHOOK_URL не установлен в переменных окружения!");
-      log.info("Используйте ngrok или другой туннель для локальной разработки");
-      log.info("Например: WEBHOOK_URL=https://your-domain.ngrok.io");
+      log.error("WEBHOOK_URL не установлен в .env!");
       process.exit(1);
     }
 
-    // Сначала удаляем старый webhook и все накопленные обновления
+    // Удаляем старый webhook
     await bot.deleteWebHook({ drop_pending_updates: true });
-    log.info("Старый webhook удален, pending updates очищены");
+    log.info("Старый webhook удален");
 
-    // ВАЖНО: Устанавливаем webhook БЕЗ кодирования, Telegram сам закодирует
-    const fullWebhookUrl = `${WEBHOOK_URL}${webhookPath}`;
-    await bot.setWebHook(fullWebhookUrl);
+    // Устанавливаем новый webhook
+    const webhookUrl = `${WEBHOOK_URL}${webhookPath}`;
+    await bot.setWebHook(webhookUrl);
 
     const webhookInfo = await bot.getWebHookInfo();
     log.success(`Webhook установлен: ${webhookInfo.url}`);
     log.info(`Pending updates: ${webhookInfo.pending_update_count}`);
-    
-    // Проверяем, что роут существует
-    log.info(`Telegram будет отправлять запросы на: ${webhookInfo.url}`);
-    log.info(`Express слушает на: ${webhookPath} И ${webhookPathEncoded}`);
 
     if (webhookInfo.last_error_date) {
-      log.error(`Последняя ошибка webhook: ${webhookInfo.last_error_message}`);
+      log.error(`Ошибка webhook: ${webhookInfo.last_error_message}`);
       log.error(
-        `Дата ошибки: ${new Date(webhookInfo.last_error_date * 1000).toISOString()}`,
+        `Дата: ${new Date(webhookInfo.last_error_date * 1000).toISOString()}`
       );
     }
 
-    // Запускаем Express сервер
-    app.listen(PORT, () => {
-      log.success(`Express сервер запущен на порту ${PORT}`);
-      log.info(`Webhook endpoint: POST ${fullWebhookUrl}`);
-      log.info(`Health check: GET /health`);
-      log.info(`Webhook info: GET /webhook-info`);
+    // Запускаем сервер на 0.0.0.0 для Render
+    app.listen(PORT, "0.0.0.0", () => {
+      log.success(`Сервер запущен на порту ${PORT}`);
+      log.info(`Webhook: ${webhookUrl}`);
+      log.info(`Health: /health`);
     });
   } catch (error) {
-    log.error("Ошибка инициализации бота:", error);
+    log.error("Ошибка инициализации:", error);
     process.exit(1);
   }
 }
 
-// Graceful shutdown
+// Graceful shutdown - УПРОЩЕННЫЙ
 process.on("SIGINT", async () => {
-  log.info("Получен сигнал SIGINT. Останавливаем бота...");
-  try {
-    await bot.deleteWebHook();
-    log.success("Webhook удален");
-    process.exit(0);
-  } catch (error) {
-    log.error("Ошибка при удалении webhook:", error);
-    process.exit(1);
-  }
+  log.info("SIGINT получен, останавливаем...");
+  process.exit(0);
 });
 
 process.on("SIGTERM", async () => {
-  log.info("SIGTERM получен, останавливаем бота...");
-  try {
-    await bot.deleteWebHook();
-    log.success("Webhook удален");
-    
-    // Импортируем agenda только если нужен
-    const { agenda } = require("../agenda/agenda");
-    await agenda.stop();
-    log.success("Agenda остановлена");
-    
-    process.exit(0);
-  } catch (err) {
-    log.error("Ошибка остановки:", err);
-    process.exit(1);
-  }
+  log.info("SIGTERM получен, останавливаем...");
+  process.exit(0);
 });
 
-// ВАЖНО: Экспортируем функции ДО инициализации
+// Экспорт
 module.exports = {
   bot,
   sendExamNotification,
@@ -598,5 +563,5 @@ module.exports = {
   app,
 };
 
-// Запускаем бота только если это главный модуль
-  initBot();
+// Запуск
+initBot();
