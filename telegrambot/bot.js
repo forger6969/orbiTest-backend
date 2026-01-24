@@ -182,12 +182,27 @@ bot.onText(/\/start/, async (msg) => {
   const userId = msg.from.id;
   const chatType = msg.chat.type;
 
-  log.info(`Команда /start от пользователя ${userId} в чате ${chatId}`);
+  log.info(`Команда /start от пользователя ${userId} в чате ${chatId} (тип: ${chatType})`);
 
+  // Для личного чата - приветствие без настройки
+  if (chatType === "private") {
+    return bot.sendMessage(
+      chatId,
+      "👋 Привет! Я OrbiTest бот.\n\n" +
+      "🎓 Я помогаю группам получать уведомления о новых экзаменах.\n\n" +
+      "📌 Чтобы начать работу:\n" +
+      "1. Добавьте меня в групповой чат\n" +
+      "2. Назначьте меня администратором\n" +
+      "3. Напишите /start в группе\n\n" +
+      "❓ Нужна помощь? Напишите /help"
+    );
+  }
+
+  // Для групп - полная настройка
   if (!["group", "supergroup"].includes(chatType)) {
     return bot.sendMessage(
       chatId,
-      "❌ Эта команда работает только в группах.\n\nДобавьте бота в группу и сделайте его администратором."
+      "❌ Неподдерживаемый тип чата."
     );
   }
 
@@ -230,7 +245,8 @@ bot.onText(/\/start/, async (msg) => {
 
 bot.onText(/\/help/, (msg) => {
   const chatId = msg.chat.id;
-  log.info(`Команда /help в чате ${chatId}`);
+  const chatType = msg.chat.type;
+  log.info(`Команда /help в чате ${chatId} (тип: ${chatType})`);
 
   const helpText =
     "📚 *OrbiTest Bot - Помощь*\n\n" +
@@ -253,7 +269,16 @@ bot.onText(/\/help/, (msg) => {
 
 bot.onText(/\/students/, async (msg) => {
   const chatId = msg.chat.id;
-  log.info(`Команда /students в чате ${chatId}`);
+  const chatType = msg.chat.type;
+  log.info(`Команда /students в чате ${chatId} (тип: ${chatType})`);
+
+  // Только для групп
+  if (chatType === "private") {
+    return bot.sendMessage(
+      chatId,
+      "❌ Эта команда работает только в групповых чатах.\n\nДобавьте меня в группу и используйте команду там."
+    );
+  }
 
   try {
     const students = await getStudentsThisGroup(chatId);
@@ -280,7 +305,16 @@ bot.onText(/\/students/, async (msg) => {
 
 bot.onText(/\/status/, async (msg) => {
   const chatId = msg.chat.id;
-  log.info(`Команда /status в чате ${chatId}`);
+  const chatType = msg.chat.type;
+  log.info(`Команда /status в чате ${chatId} (тип: ${chatType})`);
+
+  // Только для групп
+  if (chatType === "private") {
+    return bot.sendMessage(
+      chatId,
+      "❌ Эта команда работает только в групповых чатах.\n\nДобавьте меня в группу и используйте команду там."
+    );
+  }
 
   const linkedGroup = await isGroupAlreadyLinked(chatId);
 
@@ -578,4 +612,5 @@ module.exports = {
   app,
 };
 
-  initBot();
+// Запуск - ВСЕГДА запускаем бота
+initBot();
