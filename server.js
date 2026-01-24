@@ -6,7 +6,7 @@ const app = require("./app");
 const { initSocket } = require("./socket/socket");
 const { setIO } = require("./socket/io");
 const { initBot } = require("./telegrambot/bot");
-const { startAgenda } = require("./agenda/agenda");
+const { startAgenda, gracefulShutdown } = require("./agenda/agenda");
 
 const server = http.createServer(app);
 
@@ -34,6 +34,28 @@ server.listen(process.env.PORT, () => {
 
 io.on("connection", () => {
   console.log("Socket connected (root test)");
+});
+
+// ============================================
+// GRACEFUL SHUTDOWN ДЛЯ ONRENDER
+// ============================================
+
+// Graceful shutdown - только логирование, без process.exit()
+process.on("SIGTERM", () => {
+  console.log("SIGTERM received for OnRender deployment - continuing...");
+});
+
+process.on("SIGINT", () => {
+  console.log("SIGINT received - continuing...");
+});
+
+// Обработка необработанных ошибок
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
 });
 
 module.exports = { io };

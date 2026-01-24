@@ -496,7 +496,7 @@ async function sendExamNotification(exam) {
 // ============================================
 
 // ИСПРАВЛЕННЫЙ обработчик webhook
-app.post(webhookPath, (req, res) => {
+function webhookHandler(req, res) {
   try {
     log.info("Webhook получен от Telegram");
     log.info(`Update: ${JSON.stringify(req.body)}`);
@@ -509,31 +509,27 @@ app.post(webhookPath, (req, res) => {
     log.error("Ошибка обработки webhook:", error);
     res.sendStatus(500);
   }
-});
+}
 
 // Health check для Render
-app.get("/", (req, res) => {
-  res.send("OrbiTest Telegram Bot is running");
-});
-
-app.get("/health", (req, res) => {
+function healthHandler(req, res) {
   res.status(200).json({
     status: "OK",
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
     bot: "active",
   });
-});
+}
 
 // Информация о webhook
-app.get("/webhook-info", async (req, res) => {
+async function webhookInfoHandler(req, res) {
   try {
     const info = await bot.getWebHookInfo();
     res.json(info);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
-});
+}
 
 // ============================================
 // ИНИЦИАЛИЗАЦИЯ БОТА И СЕРВЕРА
@@ -584,15 +580,18 @@ async function initBot() {
   }
 }
 
-// Graceful shutdown
-process.on("SIGINT", async () => {
-  log.info("SIGINT получен, останавливаем...");
-  process.exit(0);
+// ============================================
+// GRACEFUL SHUTDOWN - ОТКЛЮЧЕНО ДЛЯ ONRENDER
+// ============================================
+
+// ВАЖНО: На OnRender эти обработчики вызывают проблемы с развертыванием
+// Оставляем только логирование без остановки процесса
+process.on("SIGINT", () => {
+  log.info("SIGINT получен, но процесс продолжается для OnRender");
 });
 
-process.on("SIGTERM", async () => {
-  log.info("SIGTERM получен, останавливаем...");
-  process.exit(0);
+process.on("SIGTERM", () => {
+  log.info("SIGTERM получен, но процесс продолжается для OnRender");
 });
 
 // Экспорт
@@ -601,7 +600,10 @@ module.exports = {
   sendExamNotification,
   initBot,
   createAndLinkNewGroup,
-  app, // Экспортируем app для использования в server.js
+  webhookHandler,
+  healthHandler,
+  webhookInfoHandler,
+  webhookPath,
 };
 
 // НЕ ЗАПУСКАЕМ АВТОМАТИЧЕСКИ - это делает server.js
