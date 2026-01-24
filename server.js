@@ -5,9 +5,8 @@ const { Server } = require("socket.io");
 const app = require("./app");
 const { initSocket } = require("./socket/socket");
 const { setIO } = require("./socket/io");
-const { sendExamNotification } = require("./telegrambot/bot");
+const { initBot } = require("./telegrambot/bot");
 const { startAgenda } = require("./agenda/agenda");
-
 
 const server = http.createServer(app);
 
@@ -18,14 +17,16 @@ const io = new Server(server, {
 // socket.io ni init qilish
 initSocket(io);
 // agendani ishga churish
-startAgenda()
+startAgenda();
 // bilmiman
-setIO(io)
+setIO(io);
 
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => console.log("MongoDB connected"))
   .catch(console.error);
+
+initBot();
 
 server.listen(process.env.PORT, () => {
   console.log(`Server running on http://localhost:${process.env.PORT}`);

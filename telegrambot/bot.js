@@ -541,14 +541,6 @@ app.get("/webhook-info", async (req, res) => {
 
 async function initBot() {
   try {
-    // СНАЧАЛА запускаем сервер
-    await new Promise((resolve) => {
-      app.listen(PORT, "0.0.0.0", () => {
-        log.success(`Сервер запущен на порту ${PORT}`);
-        resolve();
-      });
-    });
-
     const botInfo = await bot.getMe();
     log.success(`Бот @${botInfo.username} инициализирован`);
     log.info(`ID: ${botInfo.id}`);
@@ -585,10 +577,10 @@ async function initBot() {
     }
 
     log.info(`Webhook: ${webhookUrl}`);
-    log.info(`Health: /health`);
+    log.info(`Health: ${WEBHOOK_URL}/health`);
   } catch (error) {
     log.error("Ошибка инициализации:", error);
-    process.exit(1);
+    throw error;
   }
 }
 
@@ -609,8 +601,7 @@ module.exports = {
   sendExamNotification,
   initBot,
   createAndLinkNewGroup,
-  app,
+  app, // Экспортируем app для использования в server.js
 };
 
-// Запуск - ВСЕГДА запускаем бота
-initBot();
+// НЕ ЗАПУСКАЕМ АВТОМАТИЧЕСКИ - это делает server.js
