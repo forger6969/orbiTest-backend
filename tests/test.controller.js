@@ -126,8 +126,9 @@ const addResult = async (req, res) => {
       score,
       answers: checkedAnswers,
       successRate: procent,
-    });
+    })
     await result.save();
+    await result.populate("test")
 
 // user ga notifcation jonatish test tugaganda (websocket)
     await sendToUser(userId, {
@@ -172,7 +173,7 @@ const addResult = async (req, res) => {
     test.averageResult = average;
     await test.save();
 
-    res.json({ success: true, result, user });
+    res.json({ success: true, result });
   } catch (err) {
     console.error("AddResult error:", err);
     res.status(500).json({ success: false, message: err.message });

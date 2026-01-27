@@ -1,12 +1,10 @@
-const {userZodSchema,loginZodSchema} = require("./userZodSchema")
+const { userZodSchema, loginZodSchema } = require("./userZodSchema");
 
 const validateUser = (req, res, next) => {
   const result = userZodSchema.safeParse(req.body);
 
   if (!result.success) {
-    const errors = result.error?.errors?.map((e) => e.message) || [
-      "Invalid data",
-    ];
+    const errors = "Invalid data";
     return res.status(400).json({
       success: false,
       errors,
@@ -18,15 +16,20 @@ const validateUser = (req, res, next) => {
 
 const validateLogin = (req, res, next) => {
   const result = loginZodSchema.safeParse(req.body);
+console.log(req.body);
+
+  console.log(result);
 
   if (!result.success) {
+    const errors = "invalid login data";
+
     return res.status(400).json({
       success: false,
-      errors: result.error.errors.map((e) => e.message),
+      errors,
     });
   }
 
   next();
 };
 
-module.exports = {validateUser , validateLogin};
+module.exports = { validateUser, validateLogin };

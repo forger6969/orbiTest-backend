@@ -1,0 +1,1524 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "OrbiTest Backend API",
+    "version": "1.0.0",
+    "description": "Полная документация API для платформы тестирования и управления группами OrbiTest",
+    "contact": {
+      "name": "API Support"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000",
+      "description": "Development server"
+    },
+    {
+      "url": "https://api.orbitest.com",
+      "description": "Production server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT токен для аутентификации. Получается при логине и должен отправляться в заголовке Authorization: Bearer <token>"
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "format": "ObjectId",
+            "description": "Уникальный идентификатор пользователя"
+          },
+          "username": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 30,
+            "description": "Имя пользователя (уникальное)"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "Имя пользователя"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "Фамилия пользователя"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email адрес (уникальный)"
+          },
+          "groupID": {
+            "type": "string",
+            "format": "ObjectId",
+            "nullable": true,
+            "description": "ID группы, к которой принадлежит пользователь"
+          },
+          "grade": {
+            "type": "string",
+            "enum": [
+              "junior",
+              "strongJunior",
+              "middle",
+              "strongMiddle",
+              "senior"
+            ],
+            "default": "junior",
+            "description": "Уровень квалификации пользователя"
+          },
+          "gradeExperience": {
+            "type": "number",
+            "default": 0,
+            "description": "Баллы опыта для текущего уровня"
+          },
+          "testsHistory": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "ObjectId"
+            },
+            "description": "История сданных тестов (массив ID результатов)"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["user", "admin"],
+            "default": "user",
+            "description": "Роль пользователя в системе"
+          },
+          "avatar": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL аватара пользователя"
+          }
+        }
+      },
+      "Test": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "format": "ObjectId",
+            "description": "Уникальный идентификатор теста"
+          },
+          "testType": {
+            "type": "string",
+            "enum": [
+              "react",
+              "node",
+              "javaScript",
+              "python",
+              "html",
+              "css",
+              "vue"
+            ],
+            "description": "Тип/язык программирования для теста"
+          },
+          "testTitle": {
+            "type": "string",
+            "description": "Название теста"
+          },
+          "testDescribe": {
+            "type": "string",
+            "description": "Описание теста"
+          },
+          "testGrade": {
+            "type": "string",
+            "enum": [
+              "junior",
+              "strongJunior",
+              "middle",
+              "strongMiddle",
+              "senior"
+            ],
+            "description": "Требуемый уровень для прохождения теста"
+          },
+          "gradeExperience": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Опыт (баллы), которые получит пользователь при успешном прохождении"
+          },
+          "testTime": {
+            "type": "number",
+            "default": 1200000,
+            "description": "Время на прохождение теста в миллисекундах (по умолчанию 20 минут)"
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "questiondId": {
+                  "type": "number",
+                  "description": "ID вопроса"
+                },
+                "question": {
+                  "type": "string",
+                  "description": "Текст вопроса"
+                },
+                "variants": {
+                  "type": "object",
+                  "properties": {
+                    "a": {
+                      "type": "string",
+                      "description": "Вариант ответа A"
+                    },
+                    "b": {
+                      "type": "string",
+                      "description": "Вариант ответа B"
+                    },
+                    "c": {
+                      "type": "string",
+                      "description": "Вариант ответа C"
+                    },
+                    "d": {
+                      "type": "string",
+                      "description": "Вариант ответа D"
+                    }
+                  },
+                  "required": ["a", "b", "c", "d"]
+                },
+                "questionsScore": {
+                  "type": "number",
+                  "description": "Баллы за этот вопрос"
+                }
+              },
+              "required": ["question", "variants", "questionsScore"]
+            },
+            "description": "Массив вопросов в тесте"
+          },
+          "questionsCount": {
+            "type": "number",
+            "description": "Количество вопросов в тесте (автоматически рассчитывается)"
+          },
+          "maxScore": {
+            "type": "number",
+            "description": "Максимальный возможный балл (сумма всех questionsScore)"
+          },
+          "averageResult": {
+            "type": "number",
+            "default": 0,
+            "description": "Средний результат всех пользователей по этому тесту"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TestResult": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "format": "ObjectId",
+            "description": "Уникальный идентификатор результата"
+          },
+          "user": {
+            "type": "string",
+            "format": "ObjectId",
+            "description": "ID пользователя, сдавшего тест"
+          },
+          "test": {
+            "type": "string",
+            "format": "ObjectId",
+            "description": "ID пройденного теста"
+          },
+          "score": {
+            "type": "number",
+            "description": "Полученный балл"
+          },
+          "successRate": {
+            "type": "number",
+            "description": "Процент правильных ответов (0-100)"
+          },
+          "answers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "questionId": {
+                  "type": "string",
+                  "description": "ID вопроса"
+                },
+                "answer": {
+                  "type": "string",
+                  "enum": ["a", "b", "c", "d"],
+                  "description": "Выбранный ответ"
+                },
+                "correct": {
+                  "type": "boolean",
+                  "description": "Правильный ли ответ"
+                }
+              }
+            },
+            "description": "Массив ответов пользователя на каждый вопрос"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Group": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "format": "ObjectId",
+            "description": "Уникальный идентификатор группы"
+          },
+          "groupName": {
+            "type": "string",
+            "description": "Название группы"
+          },
+          "groupDescribe": {
+            "type": "string",
+            "description": "Описание группы"
+          },
+          "students": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "ObjectId"
+            },
+            "description": "Массив ID студентов в группе"
+          },
+          "avatar": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL аватара группы"
+          },
+          "groupPerformance": {
+            "type": "number",
+            "default": 0,
+            "description": "Общая производительность группы"
+          },
+          "groupTime": {
+            "type": "string",
+            "nullable": true,
+            "description": "Время занятий группы"
+          },
+          "groupDay": {
+            "type": "string",
+            "enum": ["even", "odd"],
+            "description": "День проведения занятий (четные/нечетные дни)"
+          },
+          "telegramId": {
+            "type": "string",
+            "nullable": true,
+            "description": "ID Telegram чата для оповещений группы"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Exam": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "format": "ObjectId",
+            "description": "Уникальный идентификатор экзамена"
+          },
+          "examTitle": {
+            "type": "string",
+            "description": "Название экзамена"
+          },
+          "examDescribe": {
+            "type": "string",
+            "description": "Описание экзамена"
+          },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "requirement": {
+                  "type": "string",
+                  "description": "Описание требования (например, 'Знание React')"
+                },
+                "score": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 10,
+                  "description": "Минимальный требуемый балл за это требование (1-10)"
+                }
+              }
+            },
+            "description": "Требования для сдачи экзамена"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["completed", "underway"],
+            "default": "underway",
+            "description": "Статус проведения экзамена"
+          },
+          "examStart": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Дата и время начала экзамена"
+          },
+          "examEnd": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Дата и время окончания экзамена"
+          },
+          "isEnd": {
+            "type": "boolean",
+            "default": false,
+            "description": "Завершен ли экзамен"
+          },
+          "group": {
+            "type": "string",
+            "format": "ObjectId",
+            "description": "ID группы, для которой проводится экзамен"
+          },
+          "maxScore": {
+            "type": "number",
+            "description": "Максимальный возможный балл (сумма всех требований)"
+          },
+          "lastReminderSent": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Дата последнего отправленного напоминания"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "JWT токен для аутентификации"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Проверка статуса сервера",
+        "tags": ["Health Check"],
+        "description": "Возвращает простое сообщение о работе сервера",
+        "responses": {
+          "200": {
+            "description": "Сервер работает",
+            "content": {
+              "text/plain": {
+                "example": "OrbiTest Backend is running"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Подробная проверка здоровья сервера",
+        "tags": ["Health Check"],
+        "description": "Возвращает статус сервера, время работы и текущее время",
+        "responses": {
+          "200": {
+            "description": "Сервер здоров",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "OK"
+                    },
+                    "uptime": {
+                      "type": "number",
+                      "description": "Время работы сервера в секундах",
+                      "example": 3600
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "service": {
+                      "type": "string",
+                      "example": "OrbiTest Backend"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "summary": "Регистрация нового пользователя",
+        "tags": ["Authentication"],
+        "description": "Создает нового пользователя в системе. Пароль хэшируется с использованием bcrypt.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "username",
+                  "email",
+                  "password",
+                  "firstName",
+                  "lastName"
+                ],
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 30,
+                    "example": "john_developer",
+                    "description": "Уникальное имя пользователя (3-30 символов)"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "john@example.com",
+                    "description": "Уникальный email адрес"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 6,
+                    "example": "SecurePassword123",
+                    "description": "Пароль (минимум 6 символов)"
+                  },
+                  "firstName": {
+                    "type": "string",
+                    "example": "John",
+                    "description": "Имя пользователя"
+                  },
+                  "lastName": {
+                    "type": "string",
+                    "example": "Doe",
+                    "description": "Фамилия пользователя"
+                  },
+                  "groupID": {
+                    "type": "string",
+                    "format": "ObjectId",
+                    "description": "ID группы для присоединения (опционально)"
+                  }
+                }
+              },
+              "examples": {
+                "basic": {
+                  "value": {
+                    "username": "john_developer",
+                    "email": "john@example.com",
+                    "password": "MyPassword123",
+                    "firstName": "John",
+                    "lastName": "Doe"
+                  }
+                },
+                "with_group": {
+                  "value": {
+                    "username": "jane_coder",
+                    "email": "jane@example.com",
+                    "password": "SecurePass456",
+                    "firstName": "Jane",
+                    "lastName": "Smith",
+                    "groupID": "507f1f77bcf86cd799439011"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Пользователь успешно зарегистрирован",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "User registered"
+                    },
+                    "newUser": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ошибка валидации",
+            "$ref": "#/components/schemas/ErrorResponse"
+          },
+          "500": {
+            "description": "Внутренняя ошибка сервера",
+            "$ref": "#/components/schemas/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "Вход в систему",
+        "tags": ["Authentication"],
+        "description": "Аутентифицирует пользователя и возвращает JWT токен для последующих запросов",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "john@example.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "example": "MyPassword123"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Успешный вход",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                },
+                "example": {
+                  "success": true,
+                  "message": "User logged in",
+                  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                  "user": {
+                    "_id": "507f1f77bcf86cd799439011",
+                    "username": "john_developer",
+                    "email": "john@example.com",
+                    "firstName": "John",
+                    "lastName": "Doe"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Неверный email или пароль",
+            "$ref": "#/components/schemas/ErrorResponse"
+          },
+          "400": {
+            "description": "Ошибка валидации",
+            "$ref": "#/components/schemas/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/user/me": {
+      "get": {
+        "summary": "Получить информацию о текущем пользователе",
+        "tags": ["User"],
+        "description": "Возвращает информацию о пользователе, чей токен был отправлен в заголовке Authorization",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Информация о пользователе",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет или невалидный токен",
+            "$ref": "#/components/schemas/ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/test/create": {
+      "post": {
+        "summary": "Создать новый тест",
+        "tags": ["Tests"],
+        "description": "Создает новый тест (только для администраторов). Включает вопросы с вариантами ответов и правильными ответами.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "testType",
+                  "testTitle",
+                  "testGrade",
+                  "gradeExperience",
+                  "questions"
+                ],
+                "properties": {
+                  "testType": {
+                    "type": "string",
+                    "enum": [
+                      "react",
+                      "node",
+                      "javaScript",
+                      "python",
+                      "html",
+                      "css",
+                      "vue"
+                    ],
+                    "example": "react",
+                    "description": "Тип теста (язык программирования)"
+                  },
+                  "testTitle": {
+                    "type": "string",
+                    "example": "React Basics Quiz",
+                    "description": "Название теста"
+                  },
+                  "testDescribe": {
+                    "type": "string",
+                    "example": "Тест на знание основ React",
+                    "description": "Описание теста (опционально)"
+                  },
+                  "testGrade": {
+                    "type": "string",
+                    "enum": [
+                      "junior",
+                      "strongJunior",
+                      "middle",
+                      "strongMiddle",
+                      "senior"
+                    ],
+                    "example": "junior",
+                    "description": "Минимальный уровень для прохождения теста"
+                  },
+                  "gradeExperience": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 10,
+                    "example": 5,
+                    "description": "Баллы опыта за успешное прохождение (1-10)"
+                  },
+                  "testTime": {
+                    "type": "number",
+                    "default": 1200000,
+                    "example": 1200000,
+                    "description": "Время на прохождение в миллисекундах"
+                  },
+                  "questions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "question",
+                        "variants",
+                        "correctAnswer",
+                        "questionsScore"
+                      ],
+                      "properties": {
+                        "question": {
+                          "type": "string",
+                          "example": "What is JSX?"
+                        },
+                        "variants": {
+                          "type": "object",
+                          "required": ["a", "b", "c", "d"],
+                          "properties": {
+                            "a": {
+                              "type": "string",
+                              "example": "JavaScript XML"
+                            },
+                            "b": {
+                              "type": "string",
+                              "example": "Java Syntax Extension"
+                            },
+                            "c": {
+                              "type": "string",
+                              "example": "JSON Extended"
+                            },
+                            "d": {
+                              "type": "string",
+                              "example": "jQuery XML"
+                            }
+                          }
+                        },
+                        "correctAnswer": {
+                          "type": "string",
+                          "enum": ["a", "b", "c", "d"],
+                          "example": "a",
+                          "description": "Буква правильного ответа"
+                        },
+                        "questionsScore": {
+                          "type": "number",
+                          "example": 5,
+                          "description": "Баллы за этот вопрос"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "testType": "react",
+                "testTitle": "React Fundamentals",
+                "testDescribe": "Тест на знание основ React",
+                "testGrade": "junior",
+                "gradeExperience": 5,
+                "testTime": 1200000,
+                "questions": [
+                  {
+                    "question": "Что такое JSX?",
+                    "variants": {
+                      "a": "JavaScript XML",
+                      "b": "Java Syntax Extension",
+                      "c": "JSON Extended",
+                      "d": "jQuery XML"
+                    },
+                    "correctAnswer": "a",
+                    "questionsScore": 5
+                  },
+                  {
+                    "question": "Как создать компонент в React?",
+                    "variants": {
+                      "a": "const Component = () => {}",
+                      "b": "function Component {}",
+                      "c": "class Component extends React.Component {}",
+                      "d": "Все варианты верны"
+                    },
+                    "correctAnswer": "d",
+                    "questionsScore": 5
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Тест успешно создан",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "test": {
+                      "$ref": "#/components/schemas/Test"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Не авторизован или нет прав администратора"
+          },
+          "400": {
+            "description": "Ошибка валидации"
+          }
+        }
+      }
+    },
+    "/api/test/all": {
+      "get": {
+        "summary": "Получить все тесты",
+        "tags": ["Tests"],
+        "description": "Возвращает список всех доступных тестов в системе",
+        "responses": {
+          "200": {
+            "description": "Список тестов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "tests": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Test"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/test/get/{id}": {
+      "get": {
+        "summary": "Получить тест по ID",
+        "tags": ["Tests"],
+        "description": "Возвращает полную информацию о конкретном тесте с вопросами (без правильных ответов для пользователей)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "ObjectId"
+            },
+            "description": "ID теста"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Информация о тесте",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "test": {
+                      "$ref": "#/components/schemas/Test"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Тест не найден"
+          }
+        }
+      }
+    },
+    "/api/test/types": {
+      "get": {
+        "summary": "Получить все типы тестов",
+        "tags": ["Tests"],
+        "description": "Возвращает список всех доступных типов тестов (языков программирования)",
+        "responses": {
+          "200": {
+            "description": "Список типов тестов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "types": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "example": [
+                        "react",
+                        "node",
+                        "javaScript",
+                        "python",
+                        "html",
+                        "css",
+                        "vue"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/test/result": {
+      "post": {
+        "summary": "Отправить результаты теста",
+        "tags": ["Tests"],
+        "description": "Сохраняет результаты прохождения теста пользователем. Вычисляет итоговый балл и процент правильных ответов.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["testId", "answers"],
+                "properties": {
+                  "testId": {
+                    "type": "string",
+                    "format": "ObjectId",
+                    "description": "ID теста"
+                  },
+                  "answers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["questionId", "answer"],
+                      "properties": {
+                        "questionId": {
+                          "type": "string",
+                          "description": "ID вопроса"
+                        },
+                        "answer": {
+                          "type": "string",
+                          "enum": ["a", "b", "c", "d"],
+                          "description": "Выбранный ответ"
+                        }
+                      }
+                    },
+                    "description": "Массив ответов на все вопросы"
+                  }
+                }
+              },
+              "example": {
+                "testId": "507f1f77bcf86cd799439011",
+                "answers": [
+                  {
+                    "questionId": "1",
+                    "answer": "a"
+                  },
+                  {
+                    "questionId": "2",
+                    "answer": "b"
+                  },
+                  {
+                    "questionId": "3",
+                    "answer": "d"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Результат успешно сохранен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "result": {
+                      "$ref": "#/components/schemas/TestResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Не авторизован"
+          },
+          "404": {
+            "description": "Тест не найден"
+          }
+        }
+      }
+    },
+    "/api/test/myResults": {
+      "get": {
+        "summary": "Получить результаты текущего пользователя",
+        "tags": ["Tests"],
+        "description": "Возвращает все результаты тестов для аутентифицированного пользователя",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Результаты пользователя",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TestResult"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Не авторизован"
+          }
+        }
+      }
+    },
+    "/api/group/create": {
+      "post": {
+        "summary": "Создать новую группу",
+        "tags": ["Groups"],
+        "description": "Создает новую группу студентов (только для администраторов)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["groupName"],
+                "properties": {
+                  "groupName": {
+                    "type": "string",
+                    "example": "Group A1",
+                    "description": "Название группы"
+                  },
+                  "groupDescribe": {
+                    "type": "string",
+                    "example": "Группа для обучения React",
+                    "description": "Описание группы (опционально)"
+                  },
+                  "avatar": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL аватара группы (опционально)"
+                  },
+                  "groupTime": {
+                    "type": "string",
+                    "example": "10:00-12:00",
+                    "description": "Время занятий (опционально)"
+                  },
+                  "groupDay": {
+                    "type": "string",
+                    "enum": ["even", "odd"],
+                    "description": "День проведения занятий"
+                  },
+                  "telegramId": {
+                    "type": "string",
+                    "description": "ID Telegram чата для оповещений (опционально)"
+                  }
+                }
+              },
+              "example": {
+                "groupName": "Frontend Group",
+                "groupDescribe": "Группа для изучения frontend разработки",
+                "groupDay": "even",
+                "groupTime": "14:00-16:00"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Группа успешно создана",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "group": {
+                      "$ref": "#/components/schemas/Group"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Не авторизован или нет прав администратора"
+          }
+        }
+      }
+    },
+    "/api/group/add": {
+      "post": {
+        "summary": "Добавить студента в группу",
+        "tags": ["Groups"],
+        "description": "Добавляет существующего пользователя в группу (только для администраторов)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["groupId", "userId"],
+                "properties": {
+                  "groupId": {
+                    "type": "string",
+                    "format": "ObjectId",
+                    "description": "ID группы"
+                  },
+                  "userId": {
+                    "type": "string",
+                    "format": "ObjectId",
+                    "description": "ID пользователя для добавления"
+                  }
+                }
+              },
+              "example": {
+                "groupId": "507f1f77bcf86cd799439011",
+                "userId": "507f1f77bcf86cd799439012"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Пользователь добавлен в группу",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "group": {
+                      "$ref": "#/components/schemas/Group"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Не авторизован или нет прав администратора"
+          },
+          "404": {
+            "description": "Группа или пользователь не найден"
+          }
+        }
+      }
+    },
+    "/api/group/all": {
+      "get": {
+        "summary": "Получить все группы",
+        "tags": ["Groups"],
+        "description": "Возвращает список всех групп в системе",
+        "responses": {
+          "200": {
+            "description": "Список групп",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Group"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/exam/create": {
+      "post": {
+        "summary": "Создать новый экзамен",
+        "tags": ["Exams"],
+        "description": "Создает новый экзамен для группы студентов (только для администраторов). Экзамен включает требования по различным навыкам.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "examTitle",
+                  "examStart",
+                  "examEnd",
+                  "group",
+                  "requirements"
+                ],
+                "properties": {
+                  "examTitle": {
+                    "type": "string",
+                    "example": "React Final Exam",
+                    "description": "Название экзамена"
+                  },
+                  "examDescribe": {
+                    "type": "string",
+                    "example": "Финальный экзамен по React",
+                    "description": "Описание экзамена (опционально)"
+                  },
+                  "examStart": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2025-02-01T10:00:00Z",
+                    "description": "Дата и время начала экзамена"
+                  },
+                  "examEnd": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2025-02-01T12:00:00Z",
+                    "description": "Дата и время окончания экзамена"
+                  },
+                  "group": {
+                    "type": "string",
+                    "format": "ObjectId",
+                    "description": "ID группы, для которой проводится экзамен"
+                  },
+                  "requirements": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "required": ["requirement", "score"],
+                      "properties": {
+                        "requirement": {
+                          "type": "string",
+                          "example": "Знание React Hooks",
+                          "description": "Описание требования"
+                        },
+                        "score": {
+                          "type": "number",
+                          "minimum": 1,
+                          "maximum": 10,
+                          "example": 8,
+                          "description": "Минимальный требуемый балл (1-10)"
+                        }
+                      }
+                    },
+                    "description": "Требования для сдачи экзамена"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["completed", "underway"],
+                    "default": "underway",
+                    "description": "Статус экзамена (опционально)"
+                  }
+                }
+              },
+              "example": {
+                "examTitle": "React Advanced Exam",
+                "examDescribe": "Продвинутый экзамен по React",
+                "examStart": "2025-02-15T10:00:00Z",
+                "examEnd": "2025-02-15T12:00:00Z",
+                "group": "507f1f77bcf86cd799439011",
+                "requirements": [
+                  {
+                    "requirement": "React Hooks",
+                    "score": 8
+                  },
+                  {
+                    "requirement": "State Management",
+                    "score": 7
+                  },
+                  {
+                    "requirement": "Performance Optimization",
+                    "score": 6
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Экзамен успешно создан",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "exam": {
+                      "$ref": "#/components/schemas/Exam"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Не авторизован или нет прав администратора"
+          },
+          "400": {
+            "description": "Ошибка валидации"
+          }
+        }
+      }
+    },
+    "/api/exam/all": {
+      "get": {
+        "summary": "Получить все экзамены",
+        "tags": ["Exams"],
+        "description": "Возвращает список всех экзаменов в системе",
+        "responses": {
+          "200": {
+            "description": "Список экзаменов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "exams": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Exam"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Health Check",
+      "description": "Эндпоинты для проверки статуса сервера"
+    },
+    {
+      "name": "Authentication",
+      "description": "Эндпоинты для регистрации и входа пользователей"
+    },
+    {
+      "name": "User",
+      "description": "Эндпоинты для работы с профилем пользователя"
+    },
+    {
+      "name": "Tests",
+      "description": "Эндпоинты для создания, получения и прохождения тестов"
+    },
+    {
+      "name": "Groups",
+      "description": "Эндпоинты для управления группами студентов"
+    },
+    {
+      "name": "Exams",
+      "description": "Эндпоинты для создания и управления экзаменами"
+    }
+  ]
+}
