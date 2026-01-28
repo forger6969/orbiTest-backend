@@ -60,7 +60,7 @@ const addStudentToGroup = async (req, res) => {
 
     // grouppani studentlariini ichidan hozir qoshilmoqchi bolgan user ni find qilish
     const findUserInGroup = group.students.find(
-      (f) => f.toString() === studentId,
+      (f) => f.toString() === studentId
     );
 
     // agar group da bu student uje bosa qosholmidigan qilish
@@ -79,13 +79,13 @@ const addStudentToGroup = async (req, res) => {
     await user.save();
 
     res.json({ success: true, group });
-// agar grouppani telegrami bosa shu telegram grouppaga message jonatish
+    // agar grouppani telegrami bosa shu telegram grouppaga message jonatish
     if (group.telegramId) {
       bot.sendMessage(
         group.telegramId,
         `👤Sizni guruhingizga yangi student qoshildi\nIsm:${user.firstName}\nFamiliya:${user.lastName}
         `,
-        { parse_mode: "Markdown" },
+        { parse_mode: "Markdown" }
       );
     }
   } catch (err) {
@@ -102,8 +102,32 @@ const getAllGroups = async (req, res) => {
   }
 };
 
+const getMyGroup = async (req, res) => {
+  try {
+    const { id } = req.user;
+
+    const user = await User.findById(id);
+
+    if (!user.groupID) {
+      return res
+        .status(200)
+        .json({ success: true, message: "Вы еще не добавленвы в группу" });
+    }
+
+    const group = await Group.findById(user.groupID).populate({
+      path: "students",
+      select: "-testsHistory",
+    });
+
+    res.json({ success: true, group });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   createGroup,
   addStudentToGroup,
   getAllGroups,
+  getMyGroup,
 };

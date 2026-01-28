@@ -1,5 +1,6 @@
 const Group = require("../groups/group.model");
 const { sendExamNotification } = require("../telegrambot/bot");
+const { User } = require("../user/user.model");
 const Exam = require("./exam.model");
 const examResult = require("./exam_result.model");
 
@@ -71,12 +72,12 @@ const getAllExams = async (req, res) => {
 const addResult = async (req, res) => {
   try {
     const { projectLink, describe, examId } = req.body;
-    const {id} = req.user
+    const { id } = req.user;
 
     if (!projectLink || !examId) {
       return res
         .status(400)
-        .json({ success: false, message: "add required fields" });
+        .json({ success: false, message: "Добавьте обязаетльные поля" });
     }
 
     const exam = await Exam.findById(examId);
@@ -84,27 +85,55 @@ const addResult = async (req, res) => {
     if (!exam) {
       return res
         .status(404)
-        .json({ success: false, message: "Exam not found" });
+        .json({ success: false, message: "Не удалось найти экзамен" });
     }
 
     if (exam.status === "completed") {
       return res
         .status(410)
-        .json({ success: false, message: "the exam is already over" });
+        .json({ success: false, message: "Этот экзамен уже закончен" });
     }
 
     const result = new examResult({
       projectLink,
       examId,
       describe: describe ? describe : null,
-      user:id,
-      requirements: exam.requirements
+      user: id,
+      requirements: exam.requirements,
     });
 
-    await result.save()
+    await result.save();
 
-    res.json({success:true , result})
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
 
+const getMyGroupExams = async (req, res) => {
+  try {
+    const { id } = req.user;
+
+    const findUser = await User.findById(id);
+    const group = findUser.groupID;
+
+    if (!group) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Вы еще не добавлены в группу" });
+    }
+
+    const exams = await Exam.find({ group });
+
+    if (!exams || exams.length <= 0) {
+      return res.status(200).json({
+        success: true,
+        message: "У этой группы пока нету экзаменов",
+        exams: exams ? exams : [],
+      });
+    }
+
+    res.json({ success: true, exams });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -113,4 +142,6 @@ const addResult = async (req, res) => {
 module.exports = {
   createExam,
   getAllExams,
+  addResult,
+  getMyGroupExams,
 };

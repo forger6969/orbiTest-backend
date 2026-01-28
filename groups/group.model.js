@@ -13,11 +13,13 @@ const groupSchema = mongoose.Schema(
     groupPerformance: { type: Number, default: 0 },
     groupTime: { type: String, default: null },
     groupDay: { type: String, enum: ["even", "odd"] },
-    telegramId:{type:String , default:null}
+    telegramId: { type: String, default: null },
+    parentsTelegramId: { type: String, default: null },
+    mentor: { type: Schema.Types.ObjectId, ref: "Mentor", required: true },
   },
   {
     timestamps: true,
-  },
+  }
 );
 
 const Group = mongoose.model("Group", groupSchema);

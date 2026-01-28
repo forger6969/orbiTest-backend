@@ -3,12 +3,12 @@ const { default: mongoose, Schema } = require("mongoose");
 const notifySchema = mongoose.Schema({
   title: { type: String, required: true },
   text: { type: String, required: true },
-  user: { type: Schema.Types.ObjectId, ref: "User",},
+  user: { type: String, required: true },
   notifyType: {
     type: String,
-    enum: ["gradeUp", "error", "warning", "success" , "info"],
+    enum: ["gradeUp", "error", "warning", "success", "info"],
   },
-  status:{type:String , enum:["viewed" , "pending"]},
+  status: { type: String, enum: ["viewed", "pending"] },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -16,5 +16,5 @@ const notifySchema = mongoose.Schema({
   },
 });
 
-const Notify = mongoose.model("Notify" , notifySchema)
-module.exports = Notify
+const Notify = mongoose.model("Notify", notifySchema);
+module.exports = Notify;
