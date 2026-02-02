@@ -3,6 +3,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const Group = require("../groups/group.model");
 const { User } = require("../user/user.model");
+const Exam = require("../exams/exam.model");
 
 const createMentor = async (req, res) => {
   try {
@@ -146,8 +147,15 @@ const getDashboard = async (req, res) => {
   try {
     const { id } = req.user;
 
-    const groups = await Group.find({ mentor: id });
+    const mentor = await Mentor.findById(id);
+    const groups = await Group.find({ mentor: id }).populate("mentor");
     const students = await User.find({ mentor: id });
+    const exams = await Exam.find().populate({
+      path: "group",
+      match: { mentor: id },
+    });
+
+    res.json({ mentor, groups, students, exams });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }
@@ -159,4 +167,5 @@ module.exports = {
   getMe,
   getMyGroup,
   getMyStudents,
+  getDashboard,
 };
