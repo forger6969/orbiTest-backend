@@ -2,6 +2,7 @@ const Mentor = require("./mentor.model");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const Group = require("../groups/group.model");
+const { User } = require("../user/user.model");
 
 const createMentor = async (req, res) => {
   try {
@@ -130,9 +131,32 @@ const createGroupWithMentor = async (req, res) => {
   }
 };
 
+const getMyStudents = async (req, res) => {
+  try {
+    const { id } = req.user;
+    const students = await User.find({ mentor: id });
+
+    res.json({ success: true, students });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+const getDashboard = async (req, res) => {
+  try {
+    const { id } = req.user;
+
+    const groups = await Group.find({ mentor: id });
+    const students = await User.find({ mentor: id });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   createMentor,
   loginMentor,
   getMe,
   getMyGroup,
+  getMyStudents,
 };

@@ -9,11 +9,13 @@ const {
   loginMentor,
   getMe,
   getMyGroup,
+  getMyStudents,
 } = require("./mentor.controller");
 
 routes.post("/create", adminMiddleware, createMentor);
 routes.post("/login", loginMentor);
 routes.get("/me", mentorMiddleware, getMe);
 routes.get("/groups", mentorMiddleware, getMyGroup);
+routes.get("/students", mentorMiddleware, getMyStudents);
 
 module.exports = routes;
