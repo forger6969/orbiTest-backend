@@ -12,7 +12,7 @@ const tokenMiddleware = async (req, res, next) => {
     }
 
     let decoded;
-// birnchi bolib admin ni teskhirib koramizza
+    // birnchi bolib admin ni teskhirib koramizza
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET_ADMIN);
       req.user = { id: decoded.id || decoded._id, admin: true };
@@ -27,7 +27,6 @@ const tokenMiddleware = async (req, res, next) => {
     return res.status(401).json({ success: false, message: "Invalid token" });
   }
 };
-
 
 const adminMiddleware = async (req, res, next) => {
   try {
@@ -47,4 +46,40 @@ const adminMiddleware = async (req, res, next) => {
   }
 };
 
-module.exports = { tokenMiddleware, adminMiddleware };
+const mentorMiddleware = (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Token is required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decoded;
+
+    // сначала пробуем менторский токен
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET_MENTOR);
+      req.user = { id: decoded.id, role: "mentor" };
+      return next();
+    } catch (err) {
+      // если менторский не подошёл, пробуем админский
+    }
+
+    // пробуем админский токен
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET_ADMIN);
+      req.user = { id: decoded.id || decoded._id, role: "admin" };
+      return next();
+    } catch (err) {
+      // если не подошёл ни один
+      return res.status(401).json({ success: false, message: "Invalid token" });
+    }
+  } catch (err) {
+    res.status(401).json({ success: false, message: "Invalid token" });
+  }
+};
+
+module.exports = { tokenMiddleware, adminMiddleware, mentorMiddleware };

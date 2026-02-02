@@ -3,20 +3,39 @@ const { default: mongoose } = require("mongoose");
 const mentorSchema = mongoose.Schema({
   firstName: { type: String, required: true },
   lastName: { type: String, required: true },
-  email: { type: String, required: true },
-  password: { type: String, required: true },
+  email: {
+    type: String,
+    required: [true, "Email обязателен"],
+    unique: [true, "Пользователь с таким email уже зарегестрирован"],
+    match: [/^\S+@\S+\.\S+$/, "Некорректный формат email"],
+  },
+  password: {
+    type: String,
+    required: [true, "Пароль обязателен"],
+    select: false,
+  },
   bio: { type: String, default: null },
   grade: {
     type: String,
-    enum: ["junior", "middle", "senior"],
-    required: true,
+    enum: {
+      values: ["junior", "middle", "senior"],
+      message: "Уровень должен быть junior, middle или senior",
+    },
+    required: [true, "Уровень обязателен"],
   },
   skills: [
     {
-      skillTitle: { type: String, required: true },
-      skillDescribe: { type: String, required: true },
+      skillTitle: {
+        type: String,
+        required: [true, "Название навыка обязательно"],
+      },
+      skillDescribe: {
+        type: String,
+        required: [true, "Описание навыка обязательно"],
+      },
     },
   ],
+  yearsExperience: { type: Number, default: null },
 });
 
 const Mentor = mongoose.model("Mentor", mentorSchema);

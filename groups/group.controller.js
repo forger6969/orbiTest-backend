@@ -4,7 +4,7 @@ const Group = require("./group.model");
 
 const createGroup = async (req, res) => {
   try {
-    const { groupName, groupDescribe, groupTime, groupDay } = req.body;
+    const { groupName, groupDescribe, groupTime, groupDay, mentor } = req.body;
 
     if (!groupName || !groupDescribe || !groupTime || !groupDay) {
       return res
@@ -12,7 +12,13 @@ const createGroup = async (req, res) => {
         .json({ success: false, message: "add required fileds" });
     }
 
-    const group = new Group({ groupName, groupDescribe, groupTime, groupDay });
+    const group = new Group({
+      groupName,
+      groupDescribe,
+      groupTime,
+      groupDay,
+      mentor,
+    });
     await group.save();
 
     res.json({ group });

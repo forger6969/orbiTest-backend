@@ -1,31 +1,138 @@
 const Mentor = require("./mentor.model");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const Group = require("../groups/group.model");
 
 const createMentor = async (req, res) => {
   try {
-    const { firstName, lastName, email, password, grade } = req.body;
+    const {
+      firstName,
+      lastName,
+      email,
+      password,
+      grade,
+      bio,
+      skills,
+      yearsExperience,
+    } = req.body;
 
-    if (!firstName || !lastName || !email || !password) {
+    if (!firstName || !lastName || !email || !password || !yearsExperience) {
       return res
         .status(400)
         .json({ success: false, message: "Заполните обязательные поля" });
     }
 
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     const newMentor = new Mentor({
       firstName,
       lastName,
       email,
-      password,
+      password: hashedPassword,
       grade: grade ? grade : "junior",
+      bio: bio ? bio : null,
+      skills: skills && skills,
     });
 
-    await Mentor.save();
+    await newMentor.save();
 
     res.json({ success: true, newMentor });
   } catch (err) {
-    console.log(err);
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+const loginMentor = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res
+        .status(400)
+        .json({ success: false, message: "email и пароль обязательные" });
+    }
+
+    const findUser = await Mentor.findOne({ email }).select("+password");
+
+    if (!findUser) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Invalid email or password" });
+    }
+
+    const isMatch = await bcrypt.compare(password, findUser.password);
+
+    if (!isMatch) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Ivalid email or password" });
+    }
+
+    const token = await jwt.sign(
+      { id: findUser._id },
+      process.env.JWT_SECRET_MENTOR,
+      { expiresIn: "24h" }
+    );
+
+    console.log(token);
+
+    res.json({ success: true, token });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+const getMe = async (req, res) => {
+  try {
+    const { id } = req.user;
+
+    const user = await Mentor.findById(id);
+
+    res.json({ id, user });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+const getMyGroup = async (req, res) => {
+  try {
+    const { id } = req.user;
+
+    const groups = await Group.find({ mentor: id });
+    res.json({ success: true, groups });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+const createGroupWithMentor = async (req, res) => {
+  try {
+    const { groupName, groupDescribe, groupDay, groupTime } = req.body;
+    const { id } = req.user;
+
+    if (!groupName || !groupDescribe || !groupDay || !groupTime) {
+      return res
+        .status(400)
+        .json({ success: false, message: "add required fields!" });
+    }
+
+    const group = new Group({
+      groupName,
+      groupDescribe,
+      groupDay,
+      groupTime,
+      mentor: id,
+    });
+
+    await group.save();
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
   }
 };
 
 module.exports = {
   createMentor,
+  loginMentor,
+  getMe,
+  getMyGroup,
 };

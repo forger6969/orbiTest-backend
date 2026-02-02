@@ -9,11 +9,17 @@ const registerUser = async (req, res) => {
     const { username, email, password, groupID, firstName, lastName } =
       req.body;
 
-    if (!username || !email || !password) {
+    if (!username || !email || !password || !groupID) {
       return res.status(400).json({ success: false, message: "add all keys!" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const group = await Group.findById(groupID);
+    if (!group) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Bunday guruh yoq" });
+    }
 
     const newUser = new User({
       username,
@@ -22,6 +28,7 @@ const registerUser = async (req, res) => {
       email,
       password: hashedPassword,
       groupID: groupID ? groupID : null,
+      mentor: group.mentor,
     });
 
     await newUser.save();
@@ -42,7 +49,7 @@ const registerUser = async (req, res) => {
         await bot.sendMessage(
           findGroupd.telegramId,
           `В вашей группе новый участник!\nИмя:${newUser.username}\nEmail:${newUser.email}`,
-          { parse_mode: "Markdown" },
+          { parse_mode: "Markdown" }
         );
       }
     }
