@@ -162,7 +162,7 @@ const getDashboard = async (req, res) => {
 
     const mentor = await Mentor.findById(id);
     const groups = await Group.find({ mentor: id }).populate("mentor");
-    const students = await User.find({ mentor: id });
+    const students = await User.find({ mentor: id }).populate("groupID");
     const exams = await Exam.find().populate({
       path: "group",
       match: { mentor: id },

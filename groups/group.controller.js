@@ -46,15 +46,27 @@ const addStudentToGroup = async (req, res) => {
         .json({ success: false, message: "user not found" });
     }
 
-    // const updatedGroup = await Group.findByIdAndUpdate(
-    //   groupId,
-    //   {
-    //     $addToSet: { students: studentId },
-    //   },
-    //   {
-    //     new: true,
-    //   },
-    // );
+    if (user.groupID) {
+      const studentCurrentGroup = await Group.findById(user.groupID);
+
+      if (studentCurrentGroup) {
+        studentCurrentGroup.students = studentCurrentGroup.students.filter(
+          (id) => id.toString() !== studentId
+        );
+        await studentCurrentGroup.save();
+      }
+
+      if (studentCurrentGroup.telegramId) {
+        bot.sendMessage(
+          studentCurrentGroup.telegramId,
+          `👋 *Student guruhdan chiqdi*\n\n` +
+            `Ism: ${user.firstName}\n` +
+            `Familiya: ${user.lastName}\n\n` +
+            `Student boshqa guruhga o'tkazildi.`,
+          { parse_mode: "Markdown" }
+        );
+      }
+    }
 
     const group = await Group.findById(groupId);
 

@@ -8,11 +8,12 @@ const {
 const {
   adminMiddleware,
   tokenMiddleware,
+  mentorMiddleware,
 } = require("../middlewares/auth.middleware");
 const routes = express.Router();
 
 routes.post("/create", adminMiddleware, createGroup);
-routes.post("/add", adminMiddleware, addStudentToGroup);
+routes.post("/add", mentorMiddleware, addStudentToGroup);
 routes.get("/all", getAllGroups);
 routes.get("/my", tokenMiddleware, getMyGroup);
 
