@@ -2,8 +2,9 @@ const { array, success } = require("zod");
 const Result = require("./result.model");
 const Test = require("./test.model");
 const { User, grades } = require("../user/user.model");
-const { sendToUser } = require("../socket/notify");
+const { sendToUser, sendToAllMentors } = require("../socket/notify");
 const Notify = require("../notification/notify.model");
+const Group = require("../groups/group.model");
 
 // helper function notify jonatishga
 const createAndSendNotify = async ({
@@ -33,7 +34,6 @@ const getAllTests = async (req, res) => {
   }
 };
 
-
 // id boyicha 1 ta testni olish
 const getTestById = async (req, res) => {
   try {
@@ -50,7 +50,6 @@ const getTestById = async (req, res) => {
     res.json({ success: true, test });
   } catch (err) {}
 };
-
 
 // yangi test create qilish (faqat admin ni dostupi bor)
 const createNewTest = async (req, res) => {
@@ -70,7 +69,13 @@ const createNewTest = async (req, res) => {
         .json({ success: false, message: "add required fields" });
     }
 
-    const newTest = new Test({testType , questions , testTitle , testGrade , gradeExperience});
+    const newTest = new Test({
+      testType,
+      questions,
+      testTitle,
+      testGrade,
+      gradeExperience,
+    });
     await newTest.save();
 
     res.json({ success: true, newTest });
@@ -90,9 +95,9 @@ const addResult = async (req, res) => {
         .json({ success: false, message: "add required fields!" });
     }
 
-    // select qilinvotti chunki togri javolari olib tashlangan (model da select:false qilingan)
     const test = await Test.findById(testId).select("+questions.correctAnswer");
     const user = await User.findById(userId);
+    const group = await Group.findById(user.groupID);
 
     if (!test) {
       return res
@@ -103,7 +108,6 @@ const addResult = async (req, res) => {
     let score = 0;
     let checkedAnswers = [];
 
-    // javoblarni tekshirish
     test.questions.forEach((q) => {
       const userAnswer = answers.find((f) => f.questionId === q._id.toString());
       if (!userAnswer) return;
@@ -126,21 +130,42 @@ const addResult = async (req, res) => {
       score,
       answers: checkedAnswers,
       successRate: procent,
-    })
+    });
     await result.save();
-    await result.populate("test")
+    await result.populate("test");
 
-// user ga notifcation jonatish test tugaganda (websocket)
+    // Уведомление студенту
     await sendToUser(userId, {
       title: "Тест завершён 🎉",
       text: `Результат: ${Math.round(procent)}%`,
       notifyType: "success",
     });
 
+    // ===== УВЕДОМЛЕНИЕ МЕНТОРАМ =====
+    await sendToAllMentors({
+      title: "Студент завершил тест 📝",
+      text: `${user.firstName} ${user.lastName} сдал тест "${test.testTitle}" с результатом ${Math.round(procent)}%`,
+      student: userId,
+      test: testId,
+      result: result._id,
+      notifyType: "testCompleted",
+      additionalData: {
+        score: score,
+        successRate: Math.round(procent),
+        testTitle: test.testTitle,
+        studentName: `${user.firstName} ${user.lastName}`,
+        studentGrade: user.grade,
+      },
+    });
+
     user.testsHistory.push(result);
     await user.save();
 
-    // agar ogan testdan otgani 85 fozidan kotta bosa gradeexprence ga test qancha expirence bersa qoshiladi
+    group.totalScore = procent;
+    group.attemptsCount += 1;
+    group.groupPerformance = Math.round(group.totalScore / group.attemptsCount);
+    await group.save();
+
     if (procent >= 85) {
       user.gradeExperience += test.gradeExperience || 0;
 
@@ -151,11 +176,24 @@ const addResult = async (req, res) => {
           user.grade = grades[currentUserGrade + 1];
           user.gradeExperience = 0;
 
-          // studentga websocket orqali gradeUP hadiqa notification jonatish
+          // Уведомление студенту о повышении
           await sendToUser(userId, {
             title: "Повышение ранга 🚀",
             text: `Ваш ранг повышен с ${oldGrade} на ${user.grade}`,
             notifyType: "gradeUp",
+          });
+
+          // Уведомление менторам о повышении студента
+          await sendToAllMentors({
+            title: "Повышение ранга студента 🎯",
+            text: `${user.firstName} ${user.lastName} повысил ранг с ${oldGrade} на ${user.grade}`,
+            student: userId,
+            notifyType: "gradeUp",
+            additionalData: {
+              studentName: `${user.firstName} ${user.lastName}`,
+              oldGrade: oldGrade,
+              newGrade: user.grade,
+            },
           });
         }
       }
@@ -163,12 +201,11 @@ const addResult = async (req, res) => {
       await user.save();
     }
 
-    // testni update qilish (shu testdan ortacha ball nechi olionishi ni ozgartirish)
     test.results.push(result._id);
     const allResults = await Result.find({ test: test._id });
     const average = Math.round(
       allResults.reduce((accum, item) => accum + item.score, 0) /
-        allResults.length,
+        allResults.length
     );
     test.averageResult = average;
     await test.save();

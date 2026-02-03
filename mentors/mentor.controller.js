@@ -4,6 +4,11 @@ const jwt = require("jsonwebtoken");
 const Group = require("../groups/group.model");
 const { User } = require("../user/user.model");
 const Exam = require("../exams/exam.model");
+const {
+  getMentorNotifications,
+  sendToAllMentors,
+} = require("../socket/notify");
+const MentorNotify = require("../notification/mentorNotify.model");
 
 const createMentor = async (req, res) => {
   try {
@@ -127,6 +132,14 @@ const createGroupWithMentor = async (req, res) => {
     });
 
     await group.save();
+    const mentor = await Mentor.findById(id);
+
+    await sendToAllMentors({
+      title: `Yangi guruh yaraldi!`,
+      text: `Mentor: ${mentor.firstName} ${mentor.lastName} ${group.groupName} nomli guruh yaratdi!`,
+    });
+
+    res.json({ success: true, group });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }
@@ -161,6 +174,24 @@ const getDashboard = async (req, res) => {
   }
 };
 
+const mentorNotifications = async (req, res) => {
+  try {
+    const notifications = await getMentorNotifications(req.user.id);
+    res.json({ notifications });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const deleteNotify = async (req, res) => {
+  try {
+    await MentorNotify.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   createMentor,
   loginMentor,
@@ -168,4 +199,7 @@ module.exports = {
   getMyGroup,
   getMyStudents,
   getDashboard,
+  mentorNotifications,
+  deleteNotify,
+  createGroupWithMentor,
 };

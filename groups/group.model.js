@@ -16,6 +16,8 @@ const groupSchema = mongoose.Schema(
     telegramId: { type: String, default: null },
     parentsTelegramId: { type: String, default: null },
     mentor: { type: Schema.Types.ObjectId, ref: "Mentor", required: true },
+    attemptsCount: { type: Number, default: 0 },
+    totalScore: { type: Number, default: 0 },
   },
   {
     timestamps: true,
