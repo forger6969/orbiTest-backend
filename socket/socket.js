@@ -1,153 +1,87 @@
-const connectedUsers = new Map(); // userId -> socketId
-const connectedMentors = new Map(); // mentorId -> socketId
-const studentsInTest = new Map(); // studentId -> { testId, testTitle, startTime }
+const connectedUsers = new Map();
+const connectedMentors = new Map();
+const studentsInTest = new Map();
 
 const Notify = require("../notification/notify.model");
 const MentorNotify = require("../notification/mentorNotify.model");
 
-// ... существующие функции ...
-
-function initSocket(io) {
-  console.log("Initializing socket with namespaces...");
-
-  const studentsNamespace = io.of("/students");
-  const mentorsNamespace = io.of("/mentors");
-
-  // === СТУДЕНТЫ ===
-  studentsNamespace.on("connection", (socket) => {
-    console.log("Student socket connected:", socket.id);
-
-    socket.on("register", (userId) => {
-      connectedUsers.set(userId.toString(), socket.id);
-      console.log("Student registered:", userId);
-      notifyMentorsAboutStudentStatus(userId, "online", mentorsNamespace);
-      sendPendingNotifications(userId, socket);
+// Вспомогательные функции
+const notifyMentorsAboutStudentStatus = (userId, status, mentorsNamespace) => {
+  try {
+    console.log(`📢 Notifying mentors: Student ${userId} is ${status}`);
+    mentorsNamespace.emit("studentStatus", {
+      userId,
+      status, // 'online' или 'offline'
+      timestamp: new Date(),
     });
+  } catch (error) {
+    console.error("❌ Error notifying mentors about student status:", error);
+  }
+};
 
-    // НОВОЕ: Студент начал тест
-    socket.on("startTest", async (data) => {
-      const { userId, testId, testTitle } = data;
-      console.log(`Student ${userId} started test ${testId}`);
+const sendPendingNotifications = async (userId, socket) => {
+  try {
+    const pendingNotifications = await Notify.find({
+      user: userId,
+      status: "pending",
+    }).sort({ createdAt: -1 });
 
-      // Сохраняем информацию
-      studentsInTest.set(userId.toString(), {
-        testId,
-        testTitle,
-        startTime: new Date(),
-        socketId: socket.id,
+    if (pendingNotifications.length > 0) {
+      console.log(
+        `📬 Sending ${pendingNotifications.length} pending notifications to user ${userId}`
+      );
+      pendingNotifications.forEach((notification) => {
+        socket.emit("notification", notification);
       });
+    }
+  } catch (error) {
+    console.error("❌ Error sending pending notifications:", error);
+  }
+};
 
-      // Получаем данные студента
-      try {
-        const { User } = require("../user/user.model");
-        const student = await User.findById(userId).select(
-          "firstName lastName grade avatar"
-        );
+const sendPendingMentorNotifications = async (mentorId, socket) => {
+  try {
+    const pendingNotifications = await MentorNotify.find({
+      mentor: mentorId,
+      status: "pending",
+    })
+      .populate("student", "firstName lastName grade")
+      .populate("test", "testTitle")
+      .sort({ createdAt: -1 });
 
-        // Уведомляем всех менторов
-        mentorsNamespace.emit("studentStartedTest", {
-          studentId: userId,
-          testId,
-          testTitle,
-          startTime: new Date(),
-          studentData: student,
-        });
-      } catch (error) {
-        console.error("Error notifying mentors about test start:", error);
-      }
-    });
-
-    // НОВОЕ: Студент закончил тест
-    socket.on("finishTest", async (data) => {
-      const { userId, testId, score, successRate } = data;
-      console.log(`Student ${userId} finished test ${testId}`);
-
-      // Удаляем из списка
-      studentsInTest.delete(userId.toString());
-
-      // Уведомляем менторов
-      mentorsNamespace.emit("studentFinishedTest", {
-        studentId: userId,
-        testId,
-        score,
-        successRate,
+    if (pendingNotifications.length > 0) {
+      console.log(
+        `📬 Sending ${pendingNotifications.length} pending notifications to mentor ${mentorId}`
+      );
+      pendingNotifications.forEach((notification) => {
+        socket.emit("notification", notification);
       });
-    });
+    }
+  } catch (error) {
+    console.error("❌ Error sending pending mentor notifications:", error);
+  }
+};
 
-    socket.on("markAsViewed", async (notificationId) => {
-      try {
-        await Notify.findByIdAndUpdate(notificationId, { status: "viewed" });
-        console.log("Notification marked as viewed:", notificationId);
-      } catch (error) {
-        console.error("Error marking notification as viewed:", error);
-      }
-    });
+const sendOnlineStudentsList = async (mentorId, socket) => {
+  try {
+    const { User } = require("../user/user.model");
+    const onlineStudentIds = Array.from(connectedUsers.keys());
 
-    socket.on("disconnect", () => {
-      for (const [userId, socketId] of connectedUsers.entries()) {
-        if (socketId === socket.id) {
-          connectedUsers.delete(userId);
-          console.log("Student disconnected:", userId);
+    if (onlineStudentIds.length > 0) {
+      const onlineStudents = await User.find({
+        _id: { $in: onlineStudentIds },
+      }).select("firstName lastName grade avatar");
 
-          // Если студент был в тесте - уведомляем о выходе
-          if (studentsInTest.has(userId)) {
-            const testInfo = studentsInTest.get(userId);
-            mentorsNamespace.emit("studentLeftTest", {
-              studentId: userId,
-              testId: testInfo.testId,
-              reason: "disconnect",
-            });
-            studentsInTest.delete(userId);
-          }
+      console.log(
+        `📋 Sending ${onlineStudents.length} online students to mentor ${mentorId}`
+      );
+      socket.emit("onlineStudents", onlineStudents);
+    }
+  } catch (error) {
+    console.error("❌ Error sending online students list:", error);
+  }
+};
 
-          notifyMentorsAboutStudentStatus(userId, "offline", mentorsNamespace);
-          break;
-        }
-      }
-    });
-  });
-
-  // === МЕНТОРЫ ===
-  mentorsNamespace.on("connection", (socket) => {
-    console.log("Mentor socket connected:", socket.id);
-
-    socket.on("register", async (mentorId) => {
-      connectedMentors.set(mentorId.toString(), socket.id);
-      console.log("Mentor registered:", mentorId);
-
-      await sendOnlineStudentsList(mentorId, socket);
-      await sendPendingMentorNotifications(mentorId, socket);
-
-      // НОВОЕ: Отправляем список студентов в тесте
-      await sendStudentsInTestList(mentorId, socket);
-    });
-
-    socket.on("markAsViewed", async (notificationId) => {
-      try {
-        await MentorNotify.findByIdAndUpdate(notificationId, {
-          status: "viewed",
-        });
-        console.log("Mentor notification marked as viewed:", notificationId);
-      } catch (error) {
-        console.error("Error marking mentor notification as viewed:", error);
-      }
-    });
-
-    socket.on("disconnect", () => {
-      for (const [mentorId, socketId] of connectedMentors.entries()) {
-        if (socketId === socket.id) {
-          connectedMentors.delete(mentorId);
-          console.log("Mentor disconnected:", mentorId);
-          break;
-        }
-      }
-    });
-  });
-
-  console.log("Socket namespaces initialized successfully");
-}
-
-// НОВАЯ ФУНКЦИЯ: Отправка списка студентов в тесте
 const sendStudentsInTestList = async (mentorId, socket) => {
   try {
     const { User } = require("../user/user.model");
@@ -156,29 +90,211 @@ const sendStudentsInTestList = async (mentorId, socket) => {
     const studentsInTestArray = [];
 
     for (const [studentId, testInfo] of studentsInTest.entries()) {
-      const student = await User.findById(studentId).select(
-        "firstName lastName grade avatar"
-      );
-      const test = await Test.findById(testInfo.testId).select("testTitle");
+      try {
+        const student = await User.findById(studentId).select(
+          "firstName lastName grade avatar"
+        );
+        const test = await Test.findById(testInfo.testId).select("testTitle");
 
-      studentsInTestArray.push({
-        studentId,
-        studentData: student,
-        testId: testInfo.testId,
-        testTitle: test?.testTitle || testInfo.testTitle,
-        startTime: testInfo.startTime,
-      });
+        if (student) {
+          studentsInTestArray.push({
+            studentId,
+            studentData: student,
+            testId: testInfo.testId,
+            testTitle: test?.testTitle || testInfo.testTitle,
+            startTime: testInfo.startTime,
+          });
+        }
+      } catch (err) {
+        console.error(`❌ Error fetching data for student ${studentId}:`, err);
+      }
     }
 
-    socket.emit("studentsInTest", studentsInTestArray);
+    if (studentsInTestArray.length > 0) {
+      console.log(
+        `🎯 Sending ${studentsInTestArray.length} students in test to mentor ${mentorId}`
+      );
+      socket.emit("studentsInTest", studentsInTestArray);
+    }
   } catch (error) {
-    console.error("Error sending students in test list:", error);
+    console.error("❌ Error sending students in test list:", error);
   }
 };
+
+function initSocket(io) {
+  console.log("🚀 [SOCKET] Initializing socket with namespaces...");
+
+  const studentsNamespace = io.of("/students");
+  const mentorsNamespace = io.of("/mentors");
+
+  console.log("✅ [SOCKET] Namespaces created successfully");
+
+  // === СТУДЕНТЫ ===
+  studentsNamespace.on("connection", (socket) => {
+    console.log("👨‍🎓 [STUDENTS] Student socket connected:", socket.id);
+
+    socket.on("register", async (userId) => {
+      try {
+        connectedUsers.set(userId.toString(), socket.id);
+        console.log("✅ [STUDENTS] Student registered:", userId);
+
+        notifyMentorsAboutStudentStatus(userId, "online", mentorsNamespace);
+        await sendPendingNotifications(userId, socket);
+      } catch (error) {
+        console.error("❌ [STUDENTS] Error in register:", error);
+      }
+    });
+
+    socket.on("startTest", async (data) => {
+      try {
+        const { userId, testId, testTitle } = data;
+        console.log(`🎯 [STUDENTS] Student ${userId} started test ${testId}`);
+
+        studentsInTest.set(userId.toString(), {
+          testId,
+          testTitle,
+          startTime: new Date(),
+          socketId: socket.id,
+        });
+
+        const { User } = require("../user/user.model");
+        const student = await User.findById(userId).select(
+          "firstName lastName grade avatar"
+        );
+
+        mentorsNamespace.emit("studentStartedTest", {
+          studentId: userId,
+          testId,
+          testTitle,
+          startTime: new Date(),
+          studentData: student,
+        });
+
+        console.log(`✅ [STUDENTS] Notified mentors about test start`);
+      } catch (error) {
+        console.error("❌ [STUDENTS] Error in startTest:", error);
+      }
+    });
+
+    socket.on("finishTest", async (data) => {
+      try {
+        const { userId, testId, score, successRate } = data;
+        console.log(`✅ [STUDENTS] Student ${userId} finished test ${testId}`);
+
+        studentsInTest.delete(userId.toString());
+
+        mentorsNamespace.emit("studentFinishedTest", {
+          studentId: userId,
+          testId,
+          score,
+          successRate,
+        });
+      } catch (error) {
+        console.error("❌ [STUDENTS] Error in finishTest:", error);
+      }
+    });
+
+    socket.on("markAsViewed", async (notificationId) => {
+      try {
+        await Notify.findByIdAndUpdate(notificationId, { status: "viewed" });
+        console.log(
+          "✅ [STUDENTS] Notification marked as viewed:",
+          notificationId
+        );
+      } catch (error) {
+        console.error(
+          "❌ [STUDENTS] Error marking notification as viewed:",
+          error
+        );
+      }
+    });
+
+    socket.on("disconnect", () => {
+      try {
+        for (const [userId, socketId] of connectedUsers.entries()) {
+          if (socketId === socket.id) {
+            connectedUsers.delete(userId);
+            console.log("❌ [STUDENTS] Student disconnected:", userId);
+
+            if (studentsInTest.has(userId)) {
+              const testInfo = studentsInTest.get(userId);
+              mentorsNamespace.emit("studentLeftTest", {
+                studentId: userId,
+                testId: testInfo.testId,
+                reason: "disconnect",
+              });
+              studentsInTest.delete(userId);
+            }
+
+            notifyMentorsAboutStudentStatus(
+              userId,
+              "offline",
+              mentorsNamespace
+            );
+            break;
+          }
+        }
+      } catch (error) {
+        console.error("❌ [STUDENTS] Error in disconnect:", error);
+      }
+    });
+  });
+
+  // === МЕНТОРЫ ===
+  mentorsNamespace.on("connection", (socket) => {
+    console.log("👨‍🏫 [MENTORS] Mentor socket connected:", socket.id);
+
+    socket.on("register", async (mentorId) => {
+      try {
+        connectedMentors.set(mentorId.toString(), socket.id);
+        console.log("✅ [MENTORS] Mentor registered:", mentorId);
+
+        await sendOnlineStudentsList(mentorId, socket);
+        await sendPendingMentorNotifications(mentorId, socket);
+        await sendStudentsInTestList(mentorId, socket);
+      } catch (error) {
+        console.error("❌ [MENTORS] Error in register:", error);
+      }
+    });
+
+    socket.on("markAsViewed", async (notificationId) => {
+      try {
+        await MentorNotify.findByIdAndUpdate(notificationId, {
+          status: "viewed",
+        });
+        console.log(
+          "✅ [MENTORS] Notification marked as viewed:",
+          notificationId
+        );
+      } catch (error) {
+        console.error(
+          "❌ [MENTORS] Error marking notification as viewed:",
+          error
+        );
+      }
+    });
+
+    socket.on("disconnect", () => {
+      try {
+        for (const [mentorId, socketId] of connectedMentors.entries()) {
+          if (socketId === socket.id) {
+            connectedMentors.delete(mentorId);
+            console.log("❌ [MENTORS] Mentor disconnected:", mentorId);
+            break;
+          }
+        }
+      } catch (error) {
+        console.error("❌ [MENTORS] Error in disconnect:", error);
+      }
+    });
+  });
+
+  console.log("✅ [SOCKET] Socket namespaces initialized successfully");
+}
 
 module.exports = {
   initSocket,
   connectedUsers,
   connectedMentors,
-  studentsInTest, // экспортируем для доступа из других модулей
+  studentsInTest,
 };
