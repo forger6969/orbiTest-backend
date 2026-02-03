@@ -1,4 +1,4 @@
-// bot.js - Telegram бот для OrbiTest (Webhook режим) - ИСПРАВЛЕНО
+// bot.js - Telegram бот для OrbiTest (Webhook режим) - ПОЛНОСТЬЮ ИСПРАВЛЕНО
 require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
@@ -28,6 +28,46 @@ const bot = new TelegramBot(BOT_TOKEN, {
 });
 
 const webhookPath = "/telegram-webhook";
+
+// ============================================
+// ФУНКЦИИ ЭКРАНИРОВАНИЯ
+// ============================================
+
+// Экранирование HTML специальных символов
+function escapeHtml(text) {
+  if (!text) return "";
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// Безопасная отправка сообщений с автоматическим fallback
+async function safeSendMessage(chatId, text, options = {}) {
+  try {
+    // Пробуем отправить с HTML
+    return await bot.sendMessage(chatId, text, {
+      ...options,
+      parse_mode: "HTML",
+    });
+  } catch (error) {
+    log.error("Ошибка отправки с HTML, пробуем без форматирования:", error);
+    try {
+      // Если не получилось - отправляем без форматирования
+      const { parse_mode, ...optionsWithoutParse } = options;
+      return await bot.sendMessage(
+        chatId,
+        text.replace(/<\/?[^>]+(>|$)/g, ""),
+        optionsWithoutParse
+      );
+    } catch (finalError) {
+      log.error("Критическая ошибка отправки сообщения:", finalError);
+      throw finalError;
+    }
+  }
+}
 
 // ============================================
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -85,7 +125,7 @@ async function linkGroupToTelegram(groupId, chatId) {
     if (group.telegramId && group.telegramId !== chatId.toString()) {
       return {
         success: false,
-        message: `Группа "${group.groupName}" уже привязана к другому Telegram чату`,
+        message: `Группа "${escapeHtml(group.groupName)}" уже привязана к другому Telegram чату`,
       };
     }
 
@@ -98,7 +138,7 @@ async function linkGroupToTelegram(groupId, chatId) {
 
     return {
       success: true,
-      message: `Группа "${group.groupName}" успешно подключена и теперь будет получать уведомления!`,
+      message: `Группа "${escapeHtml(group.groupName)}" успешно подключена и теперь будет получать уведомления!`,
       groupName: group.groupName,
     };
   } catch (error) {
@@ -118,7 +158,7 @@ async function createAndLinkNewGroup(chatId, chatTitle) {
       ) {
         return {
           success: false,
-          message: `Группа "${chatTitle}" уже существует и привязана к другому Telegram чату`,
+          message: `Группа "${escapeHtml(chatTitle)}" уже существует и привязана к другому Telegram чату`,
         };
       }
 
@@ -127,7 +167,7 @@ async function createAndLinkNewGroup(chatId, chatTitle) {
 
       return {
         success: true,
-        message: `Группа "${chatTitle}" уже существовала в системе и успешно подключена!`,
+        message: `Группа "${escapeHtml(chatTitle)}" уже существовала в системе и успешно подключена!`,
         groupName: existingGroup.groupName,
       };
     }
@@ -148,7 +188,7 @@ async function createAndLinkNewGroup(chatId, chatTitle) {
 
     return {
       success: true,
-      message: `Новая группа "${chatTitle}" создана и успешно подключена к OrbiTest!\n\nТеперь вы будете получать уведомления о новых экзаменах.`,
+      message: `Новая группа "${escapeHtml(chatTitle)}" создана и успешно подключена к OrbiTest!\n\nТеперь вы будете получать уведомления о новых экзаменах.`,
       groupName: newGroup.groupName,
       isNew: true,
     };
@@ -186,84 +226,94 @@ bot.onText(/\/start/, async (msg) => {
     `Команда /start от пользователя ${userId} в чате ${chatId} (тип: ${chatType})`
   );
 
-  // Для личного чата - приветствие без настройки
-  if (chatType === "private") {
-    return bot.sendMessage(
+  try {
+    // Для личного чата - приветствие без настройки
+    if (chatType === "private") {
+      return await safeSendMessage(
+        chatId,
+        "👋 Привет! Я OrbiTest бот.\n\n" +
+          "🎓 Я помогаю группам получать уведомления о новых экзаменах.\n\n" +
+          "📌 Чтобы начать работу:\n" +
+          "1. Добавьте меня в групповой чат\n" +
+          "2. Назначьте меня администратором\n" +
+          "3. Напишите /start в группе\n\n" +
+          "❓ Нужна помощь? Напишите /help"
+      );
+    }
+
+    // Для групп - полная настройка
+    if (!["group", "supergroup"].includes(chatType)) {
+      return await safeSendMessage(chatId, "❌ Неподдерживаемый тип чата.");
+    }
+
+    const userIsAdmin = await isUserAdmin(chatId, userId);
+    if (!userIsAdmin) {
+      return await safeSendMessage(
+        chatId,
+        "⛔️ Только администраторы группы могут выполнять эту команду."
+      );
+    }
+
+    const botIsAdmin = await isBotAdmin(chatId);
+    if (!botIsAdmin) {
+      return await safeSendMessage(
+        chatId,
+        "⚠️ Бот должен быть администратором группы для корректной работы.\n\nПожалуйста, назначьте бота администратором."
+      );
+    }
+
+    const linkedGroup = await isGroupAlreadyLinked(chatId);
+    if (linkedGroup) {
+      return await safeSendMessage(
+        chatId,
+        `✅ Эта Telegram группа уже подключена к OrbiTest группе: "${escapeHtml(linkedGroup.groupName)}"\n\nВы будете получать уведомления о новых экзаменах.`
+      );
+    }
+
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: "🔗 Прикрепить эту группу", callback_data: "attach_group" }],
+      ],
+    };
+
+    await safeSendMessage(
       chatId,
-      "👋 Привет! Я OrbiTest бот.\n\n" +
-        "🎓 Я помогаю группам получать уведомления о новых экзаменах.\n\n" +
-        "📌 Чтобы начать работу:\n" +
-        "1. Добавьте меня в групповой чат\n" +
-        "2. Назначьте меня администратором\n" +
-        "3. Напишите /start в группе\n\n" +
-        "❓ Нужна помощь? Напишите /help"
+      "👋 Добро пожаловать в OrbiTest!\n\nНажмите кнопку ниже, чтобы привязать эту Telegram группу к группе студентов в системе OrbiTest.",
+      { reply_markup: keyboard }
     );
+  } catch (error) {
+    log.error("Ошибка в команде /start:", error);
+    await safeSendMessage(chatId, "❌ Произошла ошибка. Попробуйте позже.");
   }
-
-  // Для групп - полная настройка
-  if (!["group", "supergroup"].includes(chatType)) {
-    return bot.sendMessage(chatId, "❌ Неподдерживаемый тип чата.");
-  }
-
-  const userIsAdmin = await isUserAdmin(chatId, userId);
-  if (!userIsAdmin) {
-    return bot.sendMessage(
-      chatId,
-      "⛔️ Только администраторы группы могут выполнять эту команду."
-    );
-  }
-
-  const botIsAdmin = await isBotAdmin(chatId);
-  if (!botIsAdmin) {
-    return bot.sendMessage(
-      chatId,
-      "⚠️ Бот должен быть администратором группы для корректной работы.\n\nПожалуйста, назначьте бота администратором."
-    );
-  }
-
-  const linkedGroup = await isGroupAlreadyLinked(chatId);
-  if (linkedGroup) {
-    return bot.sendMessage(
-      chatId,
-      `✅ Эта Telegram группа уже подключена к OrbiTest группе: "${linkedGroup.groupName}"\n\nВы будете получать уведомления о новых экзаменах.`
-    );
-  }
-
-  const keyboard = {
-    inline_keyboard: [
-      [{ text: "🔗 Прикрепить эту группу", callback_data: "attach_group" }],
-    ],
-  };
-
-  bot.sendMessage(
-    chatId,
-    "👋 Добро пожаловать в OrbiTest!\n\nНажмите кнопку ниже, чтобы привязать эту Telegram группу к группе студентов в системе OrbiTest.",
-    { reply_markup: keyboard }
-  );
 });
 
-bot.onText(/\/help/, (msg) => {
+bot.onText(/\/help/, async (msg) => {
   const chatId = msg.chat.id;
   const chatType = msg.chat.type;
   log.info(`Команда /help в чате ${chatId} (тип: ${chatType})`);
 
-  const helpText =
-    "📚 *OrbiTest Bot - Помощь*\n\n" +
-    "*Доступные команды:*\n" +
-    "/start - Начать настройку и привязать группу\n" +
-    "/help - Показать это сообщение\n" +
-    "/status - Проверить статус подключения\n" +
-    "/students - Список студентов группы\n\n" +
-    "*Возможности бота:*\n" +
-    "✅ Привязка Telegram группы к OrbiTest\n" +
-    "✅ Создание новой группы автоматически\n" +
-    "✅ Уведомления о новых экзаменах\n" +
-    "✅ Автоматические напоминания\n\n" +
-    "*Требования:*\n" +
-    "⚡️ Бот должен быть администратором группы\n" +
-    "⚡️ Только админы могут управлять настройками";
+  try {
+    const helpText =
+      "📚 <b>OrbiTest Bot - Помощь</b>\n\n" +
+      "<b>Доступные команды:</b>\n" +
+      "/start - Начать настройку и привязать группу\n" +
+      "/help - Показать это сообщение\n" +
+      "/status - Проверить статус подключения\n" +
+      "/students - Список студентов группы\n" +
+      "/exams - Активные экзамены группы\n\n" +
+      "<b>Возможности бота:</b>\n" +
+      "✅ Привязка Telegram группы к OrbiTest\n" +
+      "✅ Создание новой группы автоматически\n" +
+      "✅ Уведомления о новых экзаменах\n" +
+      "✅ Автоматические напоминания\n\n" +
+      "<b>Требования:</b>\n" +
+      "⚡️ Бот должен быть администратором группы\n" +
+      "⚡️ Только админы могут управлять настройками";
 
-  bot.sendMessage(chatId, helpText, { parse_mode: "Markdown" });
+    await safeSendMessage(chatId, helpText);
+  } catch (error) {
+    log.error("Ошибка в команде /help:", error);
+  }
 });
 
 bot.onText(/\/students/, async (msg) => {
@@ -271,34 +321,37 @@ bot.onText(/\/students/, async (msg) => {
   const chatType = msg.chat.type;
   log.info(`Команда /students в чате ${chatId} (тип: ${chatType})`);
 
-  // Только для групп
-  if (chatType === "private") {
-    return bot.sendMessage(
-      chatId,
-      "❌ Эта команда работает только в групповых чатах.\n\nДобавьте меня в группу и используйте команду там."
-    );
-  }
-
   try {
+    // Только для групп
+    if (chatType === "private") {
+      return await safeSendMessage(
+        chatId,
+        "❌ Эта команда работает только в групповых чатах.\n\nДобавьте меня в группу и используйте команду там."
+      );
+    }
+
     const students = await getStudentsThisGroup(chatId);
 
     if (!students || students.length === 0) {
-      return bot.sendMessage(chatId, "📋 В этой группе пока нет студентов.");
+      return await safeSendMessage(
+        chatId,
+        "📋 В этой группе пока нет студентов."
+      );
     }
 
     const message =
-      "👥 *Студенты группы:*\n\n" +
+      "👥 <b>Студенты группы:</b>\n\n" +
       students
         .map(
           (student, index) =>
-            `${index + 1}. ${student.firstName} ${student.lastName} (${student.email})`
+            `${index + 1}. ${escapeHtml(student.firstName)} ${escapeHtml(student.lastName)} (${escapeHtml(student.email)})`
         )
         .join("\n");
 
-    bot.sendMessage(chatId, message, { parse_mode: "Markdown" });
+    await safeSendMessage(chatId, message);
   } catch (error) {
     log.error("Ошибка получения студентов:", error);
-    bot.sendMessage(chatId, "❌ Ошибка при получении списка студентов.");
+    await safeSendMessage(chatId, "❌ Ошибка при получении списка студентов.");
   }
 });
 
@@ -307,34 +360,37 @@ bot.onText(/\/status/, async (msg) => {
   const chatType = msg.chat.type;
   log.info(`Команда /status в чате ${chatId} (тип: ${chatType})`);
 
-  // Только для групп
-  if (chatType === "private") {
-    return bot.sendMessage(
-      chatId,
-      "❌ Эта команда работает только в групповых чатах.\n\nДобавьте меня в группу и используйте команду там."
-    );
-  }
+  try {
+    // Только для групп
+    if (chatType === "private") {
+      return await safeSendMessage(
+        chatId,
+        "❌ Эта команда работает только в групповых чатах.\n\nДобавьте меня в группу и используйте команду там."
+      );
+    }
 
-  const linkedGroup = await isGroupAlreadyLinked(chatId);
+    const linkedGroup = await isGroupAlreadyLinked(chatId);
 
-  if (linkedGroup) {
-    bot.sendMessage(
-      chatId,
-      `✅ *Статус: Подключено*\n\n` +
-        `📌 Группа: ${linkedGroup.groupName}\n` +
-        `📝 Описание: ${linkedGroup.groupDescribe || "Не указано"}\n` +
-        `👥 Студентов: ${linkedGroup.students?.length || 0}\n\n` +
-        `Вы будете получать уведомления о новых экзаменах.`,
-      { parse_mode: "Markdown" }
-    );
-  } else {
-    bot.sendMessage(
-      chatId,
-      "❌ *Статус: Не подключено*\n\n" +
-        "Эта группа ещё не привязана к OrbiTest.\n" +
-        "Используйте /start для настройки.",
-      { parse_mode: "Markdown" }
-    );
+    if (linkedGroup) {
+      await safeSendMessage(
+        chatId,
+        `✅ <b>Статус: Подключено</b>\n\n` +
+          `📌 Группа: ${escapeHtml(linkedGroup.groupName)}\n` +
+          `📝 Описание: ${escapeHtml(linkedGroup.groupDescribe || "Не указано")}\n` +
+          `👥 Студентов: ${linkedGroup.students?.length || 0}\n\n` +
+          `Вы будете получать уведомления о новых экзаменах.`
+      );
+    } else {
+      await safeSendMessage(
+        chatId,
+        "❌ <b>Статус: Не подключено</b>\n\n" +
+          "Эта группа ещё не привязана к OrbiTest.\n" +
+          "Используйте /start для настройки."
+      );
+    }
+  } catch (error) {
+    log.error("Ошибка в команде /status:", error);
+    await safeSendMessage(chatId, "❌ Произошла ошибка при проверке статуса.");
   }
 });
 
@@ -343,19 +399,19 @@ bot.onText(/\/exams/, async (msg) => {
   const chatType = msg.chat.type;
   log.info(`Команда /exams в чате ${chatId} (тип: ${chatType})`);
 
-  // Только для групп
-  if (chatType === "private") {
-    return bot.sendMessage(
-      chatId,
-      "❌ Эта команда работает только в групповых чатах.\n\nДобавьте меня в группу и используйте команду там."
-    );
-  }
-
   try {
+    // Только для групп
+    if (chatType === "private") {
+      return await safeSendMessage(
+        chatId,
+        "❌ Эта команда работает только в групповых чатах.\n\nДобавьте меня в группу и используйте команду там."
+      );
+    }
+
     const group = await Group.findOne({ telegramId: chatId.toString() });
 
     if (!group) {
-      return bot.sendMessage(
+      return await safeSendMessage(
         chatId,
         "❌ Эта группа еще не подключена к OrbiTest.\n\nИспользуйте /start для настройки."
       );
@@ -364,20 +420,20 @@ bot.onText(/\/exams/, async (msg) => {
     const exams = await Exam.find({ group: group._id, status: "underway" });
 
     if (!exams || exams.length === 0) {
-      return bot.sendMessage(
+      return await safeSendMessage(
         chatId,
         "📋 У вашей группы нет активных экзаменов или они все завершены."
       );
     }
 
     const message =
-      "📚 *Активные экзамены:*\n\n" +
+      "📚 <b>Активные экзамены:</b>\n\n" +
       exams
         .map((exam, i) => {
           const endDate = new Date(exam.examEnd);
           const startDate = new Date(exam.examStart);
 
-          const endMonth = endDate.getMonth() + 1; // Месяцы начинаются с 0
+          const endMonth = endDate.getMonth() + 1;
           const endDay = endDate.getDate();
           const endHour = endDate.getHours().toString().padStart(2, "0");
           const endMinute = endDate.getMinutes().toString().padStart(2, "0");
@@ -391,18 +447,18 @@ bot.onText(/\/exams/, async (msg) => {
             .padStart(2, "0");
 
           return (
-            `${i + 1}. *${exam.examTitle}*\n` +
-            `📝 Описание: ${exam.examDescribe || "Не указано"}\n` +
+            `${i + 1}. <b>${escapeHtml(exam.examTitle)}</b>\n` +
+            `📝 Описание: ${escapeHtml(exam.examDescribe || "Не указано")}\n` +
             `🟢 Начало: ${startDay}.${startMonth.toString().padStart(2, "0")} в ${startHour}:${startMinute}\n` +
             `🔴 Дедлайн: ${endDay}.${endMonth.toString().padStart(2, "0")} в ${endHour}:${endMinute}\n`
           );
         })
         .join("\n");
 
-    bot.sendMessage(chatId, message, { parse_mode: "Markdown" });
+    await safeSendMessage(chatId, message);
   } catch (error) {
     log.error("Ошибка при получении экзаменов:", error);
-    bot.sendMessage(
+    await safeSendMessage(
       chatId,
       "❌ Произошла ошибка при получении списка экзаменов. Попробуйте позже."
     );
@@ -421,95 +477,109 @@ bot.on("callback_query", async (callbackQuery) => {
 
   log.info(`Callback: ${data} от пользователя ${userId} в чате ${chatId}`);
 
-  const userIsAdmin = await isUserAdmin(chatId, userId);
-  if (!userIsAdmin) {
-    return bot.answerCallbackQuery(callbackQuery.id, {
-      text: "⛔️ Только администраторы могут выполнять это действие",
-      show_alert: true,
-    });
-  }
+  try {
+    const userIsAdmin = await isUserAdmin(chatId, userId);
+    if (!userIsAdmin) {
+      return await bot.answerCallbackQuery(callbackQuery.id, {
+        text: "⛔️ Только администраторы могут выполнять это действие",
+        show_alert: true,
+      });
+    }
 
-  if (data === "attach_group") {
-    const groups = await getAllGroups();
+    if (data === "attach_group") {
+      const groups = await getAllGroups();
 
-    const keyboard = {
-      inline_keyboard: groups.map((group) => [
-        {
-          text: `${group.groupName}`,
-          callback_data: `select_${group._id}`,
-        },
-      ]),
-    };
+      const keyboard = {
+        inline_keyboard: groups.map((group) => [
+          {
+            text: escapeHtml(group.groupName),
+            callback_data: `select_${group._id}`,
+          },
+        ]),
+      };
 
-    keyboard.inline_keyboard.push([
-      { text: "➕ Создать новую группу", callback_data: "create_new" },
-    ]);
+      keyboard.inline_keyboard.push([
+        { text: "➕ Создать новую группу", callback_data: "create_new" },
+      ]);
 
-    keyboard.inline_keyboard.push([
-      { text: "❌ Отмена", callback_data: "cancel" },
-    ]);
+      keyboard.inline_keyboard.push([
+        { text: "❌ Отмена", callback_data: "cancel" },
+      ]);
 
-    bot.answerCallbackQuery(callbackQuery.id);
+      await bot.answerCallbackQuery(callbackQuery.id);
 
-    let messageText =
-      groups.length > 0
-        ? "📋 Выберите группу из списка или создайте новую:"
-        : "📋 В системе пока нет групп.\n\nВы можете создать новую группу автоматически:";
+      let messageText =
+        groups.length > 0
+          ? "📋 Выберите группу из списка или создайте новую:"
+          : "📋 В системе пока нет групп.\n\nВы можете создать новую группу автоматически:";
 
-    bot.editMessageText(messageText, {
-      chat_id: chatId,
-      message_id: msg.message_id,
-      reply_markup: keyboard,
-    });
-  } else if (data === "create_new") {
-    bot.answerCallbackQuery(callbackQuery.id, {
-      text: "Создаем новую группу...",
-    });
-
-    const chat = await bot.getChat(chatId);
-    const chatTitle = chat.title || "Новая группа";
-
-    const result = await createAndLinkNewGroup(chatId, chatTitle);
-
-    if (result.success) {
-      const successMessage = result.isNew
-        ? `✅ ${result.message}\n\n📝 Название: ${chatTitle}\n\nВы можете изменить описание и добавить студентов в веб-интерфейсе OrbiTest.`
-        : `✅ ${result.message}`;
-
-      bot.editMessageText(successMessage, {
+      await bot.editMessageText(messageText, {
         chat_id: chatId,
         message_id: msg.message_id,
+        reply_markup: keyboard,
       });
-    } else {
-      bot.editMessageText(`❌ ${result.message}`, {
+    } else if (data === "create_new") {
+      await bot.answerCallbackQuery(callbackQuery.id, {
+        text: "Создаем новую группу...",
+      });
+
+      const chat = await bot.getChat(chatId);
+      const chatTitle = chat.title || "Новая группа";
+
+      const result = await createAndLinkNewGroup(chatId, chatTitle);
+
+      if (result.success) {
+        const successMessage = result.isNew
+          ? `✅ ${result.message}\n\n📝 Название: ${escapeHtml(chatTitle)}\n\nВы можете изменить описание и добавить студентов в веб-интерфейсе OrbiTest.`
+          : `✅ ${result.message}`;
+
+        await bot.editMessageText(successMessage, {
+          chat_id: chatId,
+          message_id: msg.message_id,
+          parse_mode: "HTML",
+        });
+      } else {
+        await bot.editMessageText(`❌ ${result.message}`, {
+          chat_id: chatId,
+          message_id: msg.message_id,
+        });
+      }
+    } else if (data.startsWith("select_")) {
+      const groupId = data.replace("select_", "");
+
+      const result = await linkGroupToTelegram(groupId, chatId);
+
+      await bot.answerCallbackQuery(callbackQuery.id);
+
+      if (result.success) {
+        await bot.editMessageText(`✅ ${result.message}`, {
+          chat_id: chatId,
+          message_id: msg.message_id,
+          parse_mode: "HTML",
+        });
+      } else {
+        await bot.editMessageText(`❌ ${result.message}`, {
+          chat_id: chatId,
+          message_id: msg.message_id,
+        });
+      }
+    } else if (data === "cancel") {
+      await bot.answerCallbackQuery(callbackQuery.id);
+      await bot.editMessageText("❌ Операция отменена.", {
         chat_id: chatId,
         message_id: msg.message_id,
       });
     }
-  } else if (data.startsWith("select_")) {
-    const groupId = data.replace("select_", "");
-
-    const result = await linkGroupToTelegram(groupId, chatId);
-
-    bot.answerCallbackQuery(callbackQuery.id);
-
-    if (result.success) {
-      bot.editMessageText(`✅ ${result.message}`, {
-        chat_id: chatId,
-        message_id: msg.message_id,
+  } catch (error) {
+    log.error("Ошибка в callback_query:", error);
+    try {
+      await bot.answerCallbackQuery(callbackQuery.id, {
+        text: "❌ Произошла ошибка. Попробуйте позже.",
+        show_alert: true,
       });
-    } else {
-      bot.editMessageText(`❌ ${result.message}`, {
-        chat_id: chatId,
-        message_id: msg.message_id,
-      });
+    } catch (err) {
+      log.error("Не удалось ответить на callback:", err);
     }
-  } else if (data === "cancel") {
-    bot.answerCallbackQuery(callbackQuery.id);
-    bot.editMessageText("❌ Операция отменена.", {
-      chat_id: chatId,
-      message_id: msg.message_id,
-    });
   }
 });
 
@@ -531,25 +601,37 @@ async function sendExamNotification(exam) {
       return { success: false, message: "Группа не привязана к Telegram" };
     }
 
-    const examName = exam.examTitle || "Новый экзамен";
+    const examName = escapeHtml(exam.examTitle || "Новый экзамен");
+    const examDescribe = escapeHtml(exam.examDescribe || "");
     const deadline = exam.examEnd
-      ? new Date(exam.examEnd).toLocaleString("ru-RU")
+      ? new Date(exam.examEnd).toLocaleString("ru-RU", {
+          timeZone: "Asia/Tashkent",
+        })
       : "Не указан";
     const examLink = exam.examResource?.link || "";
 
     let message =
-      `🎓 *Новый экзамен доступен!*\n\n` +
-      `📝 Название: ${examName}\n` +
-      `⏰ Дедлайн: ${deadline}\n`;
+      `🎓 <b>Новый экзамен доступен!</b>\n\n` + `📝 Название: ${examName}\n`;
+
+    if (examDescribe) {
+      message += `📄 Описание: ${examDescribe}\n`;
+    }
+
+    message += `⏰ Дедлайн: ${deadline}\n`;
 
     if (examLink) {
-      message += `🔗 Ссылка: ${examLink}\n`;
+      // Проверяем что ссылка валидная
+      try {
+        new URL(examLink);
+        message += `🔗 <a href="${examLink}">Перейти к экзамену</a>\n`;
+      } catch (e) {
+        message += `🔗 Ссылка: ${escapeHtml(examLink)}\n`;
+      }
     }
 
     message += `\n✅ Удачи на экзамене!`;
 
-    await bot.sendMessage(group.telegramId, message, {
-      parse_mode: "Markdown",
+    await safeSendMessage(group.telegramId, message, {
       disable_web_page_preview: false,
     });
 
@@ -565,11 +647,14 @@ async function sendExamNotification(exam) {
 // WEBHOOK ENDPOINTS
 // ============================================
 
-// ИСПРАВЛЕННЫЙ обработчик webhook
 function webhookHandler(req, res) {
   try {
     log.info("Webhook получен от Telegram");
-    log.info(`Update: ${JSON.stringify(req.body)}`);
+
+    // Не логируем весь body в продакшене (может быть слишком много данных)
+    if (process.env.NODE_ENV !== "production") {
+      log.info(`Update: ${JSON.stringify(req.body)}`);
+    }
 
     // Передаем обновление боту
     bot.processUpdate(req.body);
@@ -581,22 +666,32 @@ function webhookHandler(req, res) {
   }
 }
 
-// Health check для Render
 function healthHandler(req, res) {
   res.status(200).json({
     status: "OK",
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
     bot: "active",
+    webhook: "configured",
   });
 }
 
-// Информация о webhook
 async function webhookInfoHandler(req, res) {
   try {
     const info = await bot.getWebHookInfo();
-    res.json(info);
+    res.json({
+      url: info.url,
+      has_custom_certificate: info.has_custom_certificate,
+      pending_update_count: info.pending_update_count,
+      last_error_date: info.last_error_date
+        ? new Date(info.last_error_date * 1000).toISOString()
+        : null,
+      last_error_message: info.last_error_message || null,
+      max_connections: info.max_connections,
+      allowed_updates: info.allowed_updates,
+    });
   } catch (error) {
+    log.error("Ошибка получения информации о webhook:", error);
     res.status(500).json({ error: error.message });
   }
 }
@@ -607,20 +702,22 @@ async function webhookInfoHandler(req, res) {
 
 async function initBot() {
   try {
+    log.info("Начинаем инициализацию Telegram бота...");
+
     const botInfo = await bot.getMe();
     log.success(`Бот @${botInfo.username} инициализирован`);
     log.info(`ID: ${botInfo.id}`);
 
     if (!WEBHOOK_URL) {
       log.error("WEBHOOK_URL не установлен в .env!");
-      process.exit(1);
+      throw new Error("WEBHOOK_URL is required");
     }
 
     // Удаляем старый webhook
     await bot.deleteWebHook({ drop_pending_updates: true });
     log.info("Старый webhook удален");
 
-    // Небольшая задержка
+    // Небольшая задержка для стабильности
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
     // Устанавливаем новый webhook
@@ -628,43 +725,83 @@ async function initBot() {
     await bot.setWebHook(webhookUrl, {
       drop_pending_updates: true,
       allowed_updates: ["message", "callback_query"],
+      max_connections: 40,
     });
 
     // Проверяем webhook
     const webhookInfo = await bot.getWebHookInfo();
     log.success(`Webhook установлен: ${webhookInfo.url}`);
     log.info(`Pending updates: ${webhookInfo.pending_update_count}`);
+    log.info(`Max connections: ${webhookInfo.max_connections}`);
 
     if (webhookInfo.last_error_date) {
-      log.error(`Ошибка webhook: ${webhookInfo.last_error_message}`);
+      log.error(`Последняя ошибка webhook: ${webhookInfo.last_error_message}`);
       log.error(
         `Дата: ${new Date(webhookInfo.last_error_date * 1000).toISOString()}`
       );
+    } else {
+      log.success("Webhook работает без ошибок");
     }
 
-    log.info(`Webhook: ${webhookUrl}`);
-    log.info(`Health: ${WEBHOOK_URL}/health`);
+    log.info(`Webhook endpoint: ${webhookUrl}`);
+    log.info(`Health check: ${WEBHOOK_URL}/health`);
+    log.info(`Webhook info: ${WEBHOOK_URL}/webhook-info`);
+
+    return true;
   } catch (error) {
-    log.error("Ошибка инициализации:", error);
+    log.error("Критическая ошибка инициализации бота:", error);
     throw error;
   }
 }
 
 // ============================================
-// GRACEFUL SHUTDOWN - ОТКЛЮЧЕНО ДЛЯ ONRENDER
+// ОБРАБОТКА ОШИБОК
 // ============================================
 
-// ВАЖНО: На OnRender эти обработчики вызывают проблемы с развертыванием
-// Оставляем только логирование без остановки процесса
-process.on("SIGINT", () => {
-  log.info("SIGINT получен, но процесс продолжается для OnRender");
+// Обработка необработанных ошибок бота
+bot.on("polling_error", (error) => {
+  log.error("Polling error (не должно происходить в webhook режиме):", error);
 });
 
-process.on("SIGTERM", () => {
-  log.info("SIGTERM получен, но процесс продолжается для OnRender");
+bot.on("webhook_error", (error) => {
+  log.error("Webhook error:", error);
 });
 
-// Экспорт
+// ============================================
+// GRACEFUL SHUTDOWN
+// ============================================
+
+process.on("SIGINT", async () => {
+  log.info("SIGINT получен, запускаем graceful shutdown...");
+  try {
+    await bot.deleteWebHook();
+    log.info("Webhook удален");
+  } catch (error) {
+    log.error("Ошибка при удалении webhook:", error);
+  }
+});
+
+process.on("SIGTERM", async () => {
+  log.info("SIGTERM получен для OnRender deployment - продолжаем работу");
+});
+
+// Обработка необработанных промисов
+process.on("unhandledRejection", (reason, promise) => {
+  log.error("Необработанное отклонение промиса:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  log.error("Необработанное исключение:", error);
+  // Не завершаем процесс в продакшене
+  if (process.env.NODE_ENV !== "production") {
+    process.exit(1);
+  }
+});
+
+// ============================================
+// ЭКСПОРТ
+// ============================================
+
 module.exports = {
   bot,
   sendExamNotification,
@@ -675,5 +812,3 @@ module.exports = {
   webhookInfoHandler,
   webhookPath,
 };
-
-// НЕ ЗАПУСКАЕМ АВТОМАТИЧЕСКИ - это делает server.js
