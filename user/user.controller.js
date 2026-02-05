@@ -1,15 +1,17 @@
-const {User} = require("./user.model");
+const { User } = require("./user.model");
 
 const getMe = async (req, res) => {
   try {
     const { id } = req.user;
 
-    const user = await User.findById(id).populate("groupID").populate({
-      path:"testsHistory",
-      populate:{
-        path:"test"
-      }
-    })
+    const user = await User.findById(id)
+      .populate("groupID")
+      .populate({
+        path: "testsHistory",
+        populate: {
+          path: "test",
+        },
+      });
     if (!user) {
       return res
         .status(404)
@@ -22,7 +24,6 @@ const getMe = async (req, res) => {
   }
 };
 
-
 module.exports = {
-  getMe
+  getMe,
 };

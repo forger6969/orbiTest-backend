@@ -1,3 +1,4 @@
+const { sendToAllMentors } = require("../socket/notify");
 const { bot } = require("../telegrambot/bot");
 const { User } = require("../user/user.model");
 const Group = require("./group.model");
@@ -46,9 +47,11 @@ const addStudentToGroup = async (req, res) => {
         .json({ success: false, message: "user not found" });
     }
 
-    if (user.groupID) {
-      const studentCurrentGroup = await Group.findById(user.groupID);
+    const studentCurrentGroup = user.groupID
+      ? await Group.findById(user.groupID)
+      : null;
 
+    if (user.groupID) {
       if (studentCurrentGroup) {
         studentCurrentGroup.students = studentCurrentGroup.students.filter(
           (id) => id.toString() !== studentId
@@ -106,6 +109,13 @@ const addStudentToGroup = async (req, res) => {
         { parse_mode: "Markdown" }
       );
     }
+
+    await sendToAllMentors({
+      title: "Student boshqa guruhga otkazildi!",
+      text: `Student: ${user.firstName} ${user.lastName} ${studentCurrentGroup.groupName} - guruhidan , ${group.groupName} - guruhiga otkazildi`,
+      notifyType: "info",
+      student: studentId,
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -132,10 +142,12 @@ const getMyGroup = async (req, res) => {
         .json({ success: true, message: "Вы еще не добавленвы в группу" });
     }
 
-    const group = await Group.findById(user.groupID).populate({
-      path: "students",
-      select: "-testsHistory",
-    });
+    const group = await Group.findById(user.groupID)
+      .populate({
+        path: "students",
+        select: "-testsHistory",
+      })
+      .populate("mentor");
 
     res.json({ success: true, group });
   } catch (err) {
