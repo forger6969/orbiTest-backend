@@ -4,6 +4,8 @@ const {
   addStudentToGroup,
   getAllGroups,
   getMyGroup,
+  updateGroup,
+  getGroupById,
 } = require("./group.controller");
 const {
   adminMiddleware,
@@ -16,5 +18,7 @@ routes.post("/create", adminMiddleware, createGroup);
 routes.post("/add", mentorMiddleware, addStudentToGroup);
 routes.get("/all", getAllGroups);
 routes.get("/my", tokenMiddleware, getMyGroup);
+routes.patch("/update/:id", mentorMiddleware, updateGroup);
+routes.get("/:id", getGroupById);
 
 module.exports = routes;

@@ -2,7 +2,7 @@ const { array, success } = require("zod");
 const Result = require("./result.model");
 const Test = require("./test.model");
 const { User, grades } = require("../user/user.model");
-const { sendToUser, sendToAllMentors } = require("../socket/notify");
+const { sendToUser, sendToStudentMentor } = require("../socket/notify");
 const Notify = require("../notification/notify.model");
 const Group = require("../groups/group.model");
 
@@ -141,11 +141,10 @@ const addResult = async (req, res) => {
       notifyType: "success",
     });
 
-    // ===== УВЕДОМЛЕНИЕ МЕНТОРАМ =====
-    await sendToAllMentors({
+    // ===== УВЕДОМЛЕНИЕ МЕНТОРУ СТУДЕНТА =====
+    await sendToStudentMentor(userId, {
       title: "Студент завершил тест 📝",
       text: `${user.firstName} ${user.lastName} сдал тест "${test.testTitle}" с результатом ${Math.round(procent)}%`,
-      student: userId,
       test: testId,
       result: result._id,
       notifyType: "testCompleted",
@@ -161,10 +160,14 @@ const addResult = async (req, res) => {
     user.testsHistory.push(result);
     await user.save();
 
-    group.totalScore = procent;
-    group.attemptsCount += 1;
-    group.groupPerformance = Math.round(group.totalScore / group.attemptsCount);
-    await group.save();
+    if (group) {
+      group.totalScore += procent;
+      group.attemptsCount += 1;
+      group.groupPerformance = Math.round(
+        group.totalScore / group.attemptsCount
+      );
+      await group.save();
+    }
 
     if (procent >= 85) {
       user.gradeExperience += test.gradeExperience || 0;
@@ -183,11 +186,10 @@ const addResult = async (req, res) => {
             notifyType: "gradeUp",
           });
 
-          // Уведомление менторам о повышении студента
-          await sendToAllMentors({
+          // Уведомление ментору студента о повышении ранга
+          await sendToStudentMentor(userId, {
             title: "Повышение ранга студента 🎯",
             text: `${user.firstName} ${user.lastName} повысил ранг с ${oldGrade} на ${user.grade}`,
-            student: userId,
             notifyType: "gradeUp",
             additionalData: {
               studentName: `${user.firstName} ${user.lastName}`,

@@ -33,28 +33,20 @@ const registerUser = async (req, res) => {
 
     await newUser.save();
 
+    res.json({ success: true, message: "User registered", newUser });
+
     if (groupID) {
-      const findGroupd = await Group.findById(groupID);
-
-      if (!findGroupd) {
-        return res
-          .status(404)
-          .json({ success: false, message: "group not found" });
-      }
-
-      findGroupd.students.push(newUser._id);
+      group.students.push(newUser._id);
       await findGroupd.save();
 
-      if (findGroupd.telegramId) {
+      if (group.telegramId) {
         await bot.sendMessage(
-          findGroupd.telegramId,
+          group.telegramId,
           `В вашей группе новый участник!\nИмя:${newUser.username}\nEmail:${newUser.email}`,
           { parse_mode: "Markdown" }
         );
       }
     }
-
-    res.json({ success: true, message: "User registered", newUser });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

@@ -40,14 +40,14 @@ const sendToUser = async (userId, notificationData) => {
     if (socketId) {
       const io = getIO();
       io.of("/students").to(socketId).emit("notification", notification);
-      console.log(`Notification sent to user ${userId} via socket`);
+      console.log(`✅ Notification sent to user ${userId} via socket`);
     } else {
-      console.log(`User ${userId} offline. Notification saved to DB`);
+      console.log(`📭 User ${userId} offline. Notification saved to DB`);
     }
 
     return notification;
   } catch (error) {
-    console.error("Error sending notification:", error);
+    console.error("❌ Error sending notification:", error);
     throw error;
   }
 };
@@ -80,21 +80,22 @@ const sendToMentor = async (mentorId, notificationData) => {
     if (socketId) {
       const io = getIO();
       io.of("/mentors").to(socketId).emit("notification", notification);
-      console.log(`Notification sent to mentor ${mentorId} via socket`);
+      console.log(`✅ Notification sent to mentor ${mentorId} via socket`);
     } else {
-      console.log(`Mentor ${mentorId} offline. Notification saved to DB`);
+      console.log(`📭 Mentor ${mentorId} offline. Notification saved to DB`);
     }
 
     return notification;
   } catch (error) {
-    console.error("Error sending mentor notification:", error);
+    console.error("❌ Error sending mentor notification:", error);
     throw error;
   }
 };
 
 /**
- * Отправка уведомления всем менторам
+ * Отправка уведомления всем менторам (использовать только для системных оповещений)
  * @param {object} notificationData - Данные уведомления
+ * @deprecated Используйте sendToMentor для отправки конкретному ментору
  */
 const sendToAllMentors = async (notificationData) => {
   try {
@@ -102,7 +103,7 @@ const sendToAllMentors = async (notificationData) => {
     const mentors = await Mentor.find().select("_id");
 
     if (!mentors || mentors.length === 0) {
-      console.log("No mentors found in database");
+      console.log("⚠️ No mentors found in database");
       return [];
     }
 
@@ -113,17 +114,53 @@ const sendToAllMentors = async (notificationData) => {
         notifications.push(notification);
       } catch (error) {
         console.error(
-          `Error sending notification to mentor ${mentor._id}:`,
+          `❌ Error sending notification to mentor ${mentor._id}:`,
           error
         );
         // Продолжаем отправку другим менторам даже если одному не удалось
       }
     }
 
-    console.log(`Notifications sent to ${notifications.length} mentors`);
+    console.log(`✅ Notifications sent to ${notifications.length} mentors`);
     return notifications;
   } catch (error) {
-    console.error("Error sending notifications to all mentors:", error);
+    console.error("❌ Error sending notifications to all mentors:", error);
+    throw error;
+  }
+};
+
+/**
+ * Отправка уведомления ментору студента
+ * @param {string} studentId - ID студента
+ * @param {object} notificationData - Данные уведомления
+ */
+const sendToStudentMentor = async (studentId, notificationData) => {
+  try {
+    const { User } = require("../user/user.model");
+
+    // Находим студента и получаем его ментора
+    const student = await User.findById(studentId).select("mentor");
+
+    if (!student) {
+      console.log(`⚠️ Student ${studentId} not found`);
+      return null;
+    }
+
+    if (!student.mentor) {
+      console.log(`⚠️ Student ${studentId} has no assigned mentor`);
+      return null;
+    }
+
+    // Отправляем уведомление только ментору этого студента
+    const notification = await sendToMentor(student.mentor, {
+      ...notificationData,
+      student: studentId,
+    });
+
+    console.log(`✅ Notification sent to student's mentor ${student.mentor}`);
+    return notification;
+  } catch (error) {
+    console.error("❌ Error sending notification to student's mentor:", error);
     throw error;
   }
 };
@@ -141,7 +178,7 @@ const getUserNotifications = async (userId, status = null) => {
     const notifications = await Notify.find(query).sort({ createdAt: -1 });
     return notifications;
   } catch (error) {
-    console.error("Error fetching notifications:", error);
+    console.error("❌ Error fetching notifications:", error);
     throw error;
   }
 };
@@ -163,7 +200,7 @@ const getMentorNotifications = async (mentorId, status = null) => {
 
     return notifications;
   } catch (error) {
-    console.error("Error fetching mentor notifications:", error);
+    console.error("❌ Error fetching mentor notifications:", error);
     throw error;
   }
 };
@@ -181,7 +218,7 @@ const markAsViewed = async (notificationId) => {
     );
     return notification;
   } catch (error) {
-    console.error("Error marking notification as viewed:", error);
+    console.error("❌ Error marking notification as viewed:", error);
     throw error;
   }
 };
@@ -199,7 +236,7 @@ const markMentorNotifyAsViewed = async (notificationId) => {
     );
     return notification;
   } catch (error) {
-    console.error("Error marking mentor notification as viewed:", error);
+    console.error("❌ Error marking mentor notification as viewed:", error);
     throw error;
   }
 };
@@ -216,7 +253,7 @@ const deleteViewedNotifications = async (userId) => {
     });
     return result;
   } catch (error) {
-    console.error("Error deleting viewed notifications:", error);
+    console.error("❌ Error deleting viewed notifications:", error);
     throw error;
   }
 };
@@ -233,7 +270,7 @@ const deleteMentorViewedNotifications = async (mentorId) => {
     });
     return result;
   } catch (error) {
-    console.error("Error deleting mentor viewed notifications:", error);
+    console.error("❌ Error deleting mentor viewed notifications:", error);
     throw error;
   }
 };
@@ -242,6 +279,7 @@ module.exports = {
   sendToUser,
   sendToMentor,
   sendToAllMentors,
+  sendToStudentMentor, // Новая функция
   getUserNotifications,
   getMentorNotifications,
   markAsViewed,
