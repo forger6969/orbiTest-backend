@@ -1,6 +1,8 @@
 {
   "dependencies": {
+    "@sendgrid/mail": "^8.1.6",
     "agenda": "^5.0.0",
+    "axios": "^1.13.5",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",

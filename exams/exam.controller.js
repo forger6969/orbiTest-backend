@@ -139,9 +139,27 @@ const getMyGroupExams = async (req, res) => {
   }
 };
 
+const getMyExamsMentor = async (req, res) => {
+  try {
+    const { id } = req.user;
+
+    const exams = await Exam.find()
+      .populate({
+        path: "group",
+        match: { mentor: id },
+      })
+      .then((res) => res.filter((exam) => exam.group !== null));
+
+    res.json({ exams });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   createExam,
   getAllExams,
   addResult,
   getMyGroupExams,
+  getMyExamsMentor,
 };

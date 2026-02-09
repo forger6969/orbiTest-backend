@@ -3,6 +3,10 @@ const bcrypt = require("bcrypt");
 const { User } = require("../user/user.model");
 const { bot } = require("../telegrambot/bot");
 const Group = require("../groups/group.model");
+const {
+  sendEmail,
+  registrationEmailTemplate,
+} = require("../utils/EmailSender");
 
 const registerUser = async (req, res) => {
   try {
@@ -33,6 +37,15 @@ const registerUser = async (req, res) => {
 
     await newUser.save();
 
+    await sendEmail({
+      toEmail: newUser.email,
+      subject: "Уведомление о регистрации",
+      htmlContent: registrationEmailTemplate({
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+      }),
+    });
+
     res.json({ success: true, message: "User registered", newUser });
 
     if (groupID) {
@@ -48,7 +61,9 @@ const registerUser = async (req, res) => {
       }
     }
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res
+      .status(500)
+      .json({ success: false, message: err.message + ` [NAME] ${err.name}` });
   }
 };
 
