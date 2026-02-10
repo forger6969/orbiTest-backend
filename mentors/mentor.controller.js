@@ -9,6 +9,10 @@ const {
   sendToAllMentors,
 } = require("../socket/notify");
 const MentorNotify = require("../notification/mentorNotify.model");
+const {
+  sendEmail,
+  registrationEmailTemplate,
+} = require("../utils/EmailSender");
 
 const createMentor = async (req, res) => {
   try {
@@ -23,7 +27,7 @@ const createMentor = async (req, res) => {
       yearsExperience,
     } = req.body;
 
-    if (!firstName || !lastName || !email || !password || !yearsExperience) {
+    if (!firstName || !lastName || !email || !password) {
       return res
         .status(400)
         .json({ success: false, message: "Заполните обязательные поля" });
@@ -42,6 +46,15 @@ const createMentor = async (req, res) => {
     });
 
     await newMentor.save();
+
+    await sendEmail({
+      toEmail: newMentor.email,
+      subject: "Уведомление о регистрации",
+      htmlContent: registrationEmailTemplate({
+        firstName: newMentor.firstName,
+        lastName: newMentor.lastName,
+      }),
+    });
 
     res.json({ success: true, newMentor });
   } catch (err) {
@@ -86,6 +99,34 @@ const loginMentor = async (req, res) => {
     res.json({ success: true, token });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+// ✅ CALLBACK ДЛЯ GOOGLE AUTH (МЕНТОРЫ)
+const googleMentorCallback = async (req, res) => {
+  try {
+    const mentor = req.user.mentor;
+
+    if (!mentor) {
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/mentor/login?error=auth_failed`
+      );
+    }
+
+    // Генерируем JWT токен для ментора
+    const token = jwt.sign({ id: mentor._id }, process.env.JWT_SECRET_MENTOR, {
+      expiresIn: "24h",
+    });
+
+    console.log("✅ Google Mentor Login Success:", mentor.email);
+
+    // Редирект на фронтенд с токеном
+    res.redirect(
+      `${process.env.FRONTEND_URL}/mentor/auth/callback?token=${token}`
+    );
+  } catch (err) {
+    console.error("❌ Google Mentor Callback Error:", err);
+    res.redirect(`${process.env.FRONTEND_URL}/mentor/login?error=server_error`);
   }
 };
 
@@ -195,6 +236,7 @@ const deleteNotify = async (req, res) => {
 module.exports = {
   createMentor,
   loginMentor,
+  googleMentorCallback,
   getMe,
   getMyGroup,
   getMyStudents,

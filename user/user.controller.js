@@ -1,3 +1,4 @@
+const Group = require("../groups/group.model");
 const { User } = require("./user.model");
 
 const getMe = async (req, res) => {
@@ -28,7 +29,7 @@ const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const user = await User.findByIdAndDelete(id);
+    const user = await User.findById(id);
 
     if (!user) {
       return res.status(404).json({
@@ -36,6 +37,14 @@ const deleteUser = async (req, res) => {
         message: "User not found",
       });
     }
+
+    if (user.groupID) {
+      await Group.findByIdAndUpdate(user.groupID, {
+        $pull: { students: user._id },
+      });
+    }
+
+    await User.findByIdAndDelete(id);
 
     res.json({
       success: true,

@@ -94,6 +94,14 @@ const addResult = async (req, res) => {
         .json({ success: false, message: "Этот экзамен уже закончен" });
     }
 
+    const findMatch = await examResult.findOne({ user: id });
+
+    if (findMatch) {
+      return res
+        .status(410)
+        .json({ success: false, message: "Вы уже сдали етот экзамен" });
+    }
+
     const result = new examResult({
       projectLink,
       examId,
@@ -156,10 +164,250 @@ const getMyExamsMentor = async (req, res) => {
   }
 };
 
+const getResultsThisExam = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const results = await examResult.find({ examId: id });
+    res.json({ success: true, results });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+const getDetails = async (req, res) => {
+  try {
+    const { id } = req.body;
+
+    const exam = await Exam.findById(id);
+    if (!exam) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Exam not found" });
+    }
+
+    const results = await examResult.find({ examId: id });
+
+    res.json({ success: true, exam, results });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+const evaluateExamResult = async (req, res) => {
+  try {
+    const { resultId, evaluatedRequirements, feedback } = req.body;
+    const { id: mentorId } = req.user;
+
+    // Валидация входных данных
+    if (
+      !resultId ||
+      !evaluatedRequirements ||
+      !Array.isArray(evaluatedRequirements)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Добавьте обязательные поля: resultId и evaluatedRequirements",
+      });
+    }
+
+    // Находим результат экзамена
+    const result = await examResult.findById(resultId).populate({
+      path: "examId",
+      populate: {
+        path: "group",
+        select: "mentor",
+      },
+    });
+
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: "Результат экзамена не найден",
+      });
+    }
+
+    // Проверяем, что оценивающий является ментором группы
+    if (result.examId.group.mentor.toString() !== mentorId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "У вас нет прав для оценки этого экзамена",
+      });
+    }
+
+    // Проверяем, что экзамен еще не оценен
+    if (result.status === "appreciated" || result.status === "rejected") {
+      return res.status(400).json({
+        success: false,
+        message: "Этот результат уже был оценен",
+      });
+    }
+
+    // Валидация evaluatedRequirements
+    if (evaluatedRequirements.length !== result.requirements.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Количество оцененных требований не совпадает с оригинальными",
+      });
+    }
+
+    // Обновляем требования и подсчитываем общий балл
+    let totalScore = 0;
+    const updatedRequirements = result.requirements.map((req, index) => {
+      const evaluated = evaluatedRequirements[index];
+
+      if (!evaluated || typeof evaluated.isDone !== "boolean") {
+        throw new Error(`Некорректные данные для требования ${index + 1}`);
+      }
+
+      totalScore += evaluated.isDone ? req.score : 0;
+
+      return {
+        requirement: req.requirement,
+        score: req.score,
+        isDone: evaluated.isDone,
+      };
+    });
+
+    // Определяем итоговый статус
+    const maxScore = result.examId.maxScore;
+    const passThreshold = maxScore * 0.6; // 60% для сдачи
+    const newStatus = totalScore >= passThreshold ? "appreciated" : "rejected";
+
+    // Обновляем результат
+    result.requirements = updatedRequirements;
+    result.score = totalScore;
+    result.status = newStatus;
+    if (feedback) {
+      result.describe = feedback;
+    }
+
+    await result.save();
+
+    res.json({
+      success: true,
+      message: `Экзамен ${newStatus === "appreciated" ? "сдан" : "не сдан"}`,
+      result: {
+        _id: result._id,
+        score: totalScore,
+        maxScore: maxScore,
+        status: newStatus,
+        requirements: updatedRequirements,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// Получить результаты для оценки (только для ментора)
+const getResultsForEvaluation = async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const { id: mentorId } = req.user;
+
+    const exam = await Exam.findById(examId).populate("group");
+
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Экзамен не найден",
+      });
+    }
+
+    // Проверяем права ментора
+    if (exam.group.mentor.toString() !== mentorId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "У вас нет прав для просмотра этих результатов",
+      });
+    }
+
+    const results = await examResult
+      .find({ examId })
+      .populate("user", "name email")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      exam: {
+        title: exam.examTitle,
+        maxScore: exam.maxScore,
+      },
+      results,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// Получить детали одного результата
+const getResultDetail = async (req, res) => {
+  try {
+    const { resultId } = req.params;
+    const { id: userId, role } = req.user;
+
+    const result = await examResult
+      .findById(resultId)
+      .populate("user", "name email")
+      .populate({
+        path: "examId",
+        populate: {
+          path: "group",
+          select: "mentor name",
+        },
+      });
+
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: "Результат не найден",
+      });
+    }
+
+    // Проверка прав доступа
+    const isMentor =
+      result.examId.group.mentor.toString() === userId.toString();
+    const isOwner = result.user._id.toString() === userId.toString();
+
+    if (!isMentor && !isOwner) {
+      return res.status(403).json({
+        success: false,
+        message: "У вас нет прав для просмотра этого результата",
+      });
+    }
+
+    res.json({
+      success: true,
+      result,
+      exam: {
+        title: result.examId.examTitle,
+        maxScore: result.examId.maxScore,
+        requirements: result.examId.requirements,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 module.exports = {
   createExam,
   getAllExams,
   addResult,
   getMyGroupExams,
   getMyExamsMentor,
+  evaluateExamResult,
+  getResultsForEvaluation,
+  getResultDetail,
+  getDetails,
 };

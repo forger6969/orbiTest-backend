@@ -11,8 +11,20 @@ const mentorSchema = mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, "Пароль обязателен"],
+    required: function () {
+      return !this.googleId;
+    },
     select: false,
+  },
+
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
+  avatar: {
+    type: String,
+    default: null,
   },
   bio: { type: String, default: null },
   grade: {
@@ -39,5 +51,4 @@ const mentorSchema = mongoose.Schema({
 });
 
 const Mentor = mongoose.model("Mentor", mentorSchema);
-
 module.exports = Mentor;

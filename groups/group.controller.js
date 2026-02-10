@@ -114,7 +114,7 @@ const addStudentToGroup = async (req, res) => {
       await sendToMentor(oldMentorId, {
         title: "Студент покинул группу ⚠️",
         text: `${user.firstName} ${user.lastName} переведен из группы "${studentCurrentGroup.groupName}"`,
-        notifyType: "info",
+        notifyType: "studentLeft",
         student: studentId,
         additionalData: {
           studentName: `${user.firstName} ${user.lastName}`,
@@ -131,7 +131,7 @@ const addStudentToGroup = async (req, res) => {
             ? ` (переведен из "${studentCurrentGroup.groupName}")`
             : ""
         }`,
-        notifyType: "info",
+        notifyType: "newStudent",
         student: studentId,
         additionalData: {
           studentName: `${user.firstName} ${user.lastName}`,
