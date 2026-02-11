@@ -789,22 +789,31 @@ async function sendExamNotification(exam) {
 // ФУНКЦИИ ДЛЯ РОДИТЕЛЬСКИХ ГРУПП
 // ============================================
 
+// ============================================
+// ФУНКЦИИ ДЛЯ РОДИТЕЛЬСКИХ ГРУПП - ОБНОВЛЕННЫЕ ПОД РЕАЛЬНЫЕ МОДЕЛИ
+// ============================================
+
 /**
  * Отправка текстовых результатов экзамена родителям
- * @param {Object} examResults - Результаты экзамена
- * @param {String} examResults.groupId - ID группы
- * @param {String} examResults.examTitle - Название экзамена
- * @param {Array} examResults.results - Массив результатов студентов
- * @param {String} examResults.examEnd - Дата окончания экзамена
+ * @param {String} examId - ID экзамена из MongoDB
  */
-async function sendExamResultsToParents(examResults) {
+async function sendExamResultsToParents(examId) {
   try {
-    const { groupId, examTitle, results, examEnd } = examResults;
+    const ExamResult = require("../results/result.model");
+    const { User } = require("../users/user.model");
 
-    const group = await Group.findById(groupId).populate("students");
+    // Получаем экзамен с информацией о группе
+    const exam = await Exam.findById(examId).populate("group");
+
+    if (!exam) {
+      log.error(`Экзамен не найден: ${examId}`);
+      return { success: false, message: "Экзамен не найден" };
+    }
+
+    const group = exam.group;
 
     if (!group) {
-      log.error(`Группа не найдена для результатов экзамена`);
+      log.error(`Группа не найдена для экзамена ${examId}`);
       return { success: false, message: "Группа не найдена" };
     }
 
@@ -813,10 +822,18 @@ async function sendExamResultsToParents(examResults) {
       return { success: false, message: "Родительская группа не подключена" };
     }
 
-    const examTitleEscaped = escapeHtml(examTitle || "Экзамен");
-    const endDate = examEnd
-      ? new Date(examEnd).toLocaleString("ru-RU", { timeZone: "Asia/Tashkent" })
+    // Получаем все результаты для этого экзамена
+    const results = await ExamResult.find({ examId: examId }).populate("user");
+
+    const examTitleEscaped = escapeHtml(exam.examTitle || "Экзамен");
+    const endDate = exam.examEnd
+      ? new Date(exam.examEnd).toLocaleString("ru-RU", {
+          timeZone: "Asia/Tashkent",
+        })
       : "Не указан";
+
+    // Вычисляем максимальный балл из requirements экзамена
+    const maxScore = exam.maxScore || 0;
 
     let message =
       `📊 <b>Результаты экзамена</b>\n\n` +
@@ -834,30 +851,37 @@ async function sendExamResultsToParents(examResults) {
       );
 
       sortedResults.forEach((result, index) => {
-        const studentName = escapeHtml(
-          result.studentName || "Неизвестный студент"
-        );
-        const score = result.score !== undefined ? result.score : "—";
-        const maxScore = result.maxScore !== undefined ? result.maxScore : "—";
-        const percentage =
-          result.percentage !== undefined
-            ? `${result.percentage.toFixed(1)}%`
-            : "—";
+        const studentName = result.user
+          ? escapeHtml(`${result.user.firstName} ${result.user.lastName}`)
+          : "Неизвестный студент";
+
+        const score = result.score || 0;
+        const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
 
         // Эмодзи в зависимости от процента
         let emoji = "📝";
-        if (result.percentage >= 90) emoji = "🌟";
-        else if (result.percentage >= 75) emoji = "✅";
-        else if (result.percentage >= 60) emoji = "👍";
-        else if (result.percentage >= 50) emoji = "📊";
-        else if (result.percentage < 50) emoji = "❗️";
+        if (percentage >= 90) emoji = "🌟";
+        else if (percentage >= 75) emoji = "✅";
+        else if (percentage >= 60) emoji = "👍";
+        else if (percentage >= 50) emoji = "📊";
+        else if (percentage < 50) emoji = "❗️";
+
+        // Статус работы
+        let statusText = "";
+        if (result.status === "appreciated") {
+          statusText = " ✅ Принято";
+        } else if (result.status === "rejected") {
+          statusText = " ❌ Отклонено";
+        } else if (result.status === "pending") {
+          statusText = " ⏳ На проверке";
+        }
 
         message +=
-          `${index + 1}. ${emoji} <b>${studentName}</b>\n` +
-          `   Балл: ${score}/${maxScore} (${percentage})\n`;
+          `${index + 1}. ${emoji} <b>${studentName}</b>${statusText}\n` +
+          `   Балл: ${score}/${maxScore} (${percentage.toFixed(1)}%)\n`;
 
-        if (result.completedAt) {
-          const completedDate = new Date(result.completedAt).toLocaleString(
+        if (result.createdAt) {
+          const submittedDate = new Date(result.createdAt).toLocaleString(
             "ru-RU",
             {
               timeZone: "Asia/Tashkent",
@@ -867,24 +891,41 @@ async function sendExamResultsToParents(examResults) {
               minute: "2-digit",
             }
           );
-          message += `   Сдано: ${completedDate}\n`;
+          message += `   Сдано: ${submittedDate}\n`;
         }
+
+        // Показываем выполненные требования
+        if (result.requirements && result.requirements.length > 0) {
+          const completedReqs = result.requirements.filter(
+            (r) => r.isDone
+          ).length;
+          message += `   Выполнено требований: ${completedReqs}/${result.requirements.length}\n`;
+        }
+
         message += `\n`;
       });
 
       // Статистика группы
       const avgScore =
         results.reduce((sum, r) => sum + (r.score || 0), 0) / results.length;
-      const avgPercentage =
-        results.reduce((sum, r) => sum + (r.percentage || 0), 0) /
-        results.length;
-      const completedCount = results.filter((r) => r.completed).length;
+      const avgPercentage = maxScore > 0 ? (avgScore / maxScore) * 100 : 0;
+
+      const appreciatedCount = results.filter(
+        (r) => r.status === "appreciated"
+      ).length;
+      const pendingCount = results.filter((r) => r.status === "pending").length;
+      const rejectedCount = results.filter(
+        (r) => r.status === "rejected"
+      ).length;
 
       message +=
         `\n📈 <b>Статистика:</b>\n` +
-        `Средний балл: ${avgScore.toFixed(1)}\n` +
+        `Средний балл: ${avgScore.toFixed(1)}/${maxScore}\n` +
         `Средний процент: ${avgPercentage.toFixed(1)}%\n` +
-        `Сдали: ${completedCount}/${results.length}\n`;
+        `✅ Принято: ${appreciatedCount}\n` +
+        `⏳ На проверке: ${pendingCount}\n` +
+        `❌ Отклонено: ${rejectedCount}\n` +
+        `Всего работ: ${results.length}\n`;
     }
 
     await safeSendMessage(group.parentsTelegramId, message);
@@ -901,17 +942,21 @@ async function sendExamResultsToParents(examResults) {
 
 /**
  * Отправка PDF файла с результатами родителям
- * @param {Object} params
- * @param {String} params.groupId - ID группы
- * @param {String} params.examTitle - Название экзамена
- * @param {Buffer} params.pdfBuffer - PDF файл в виде Buffer
- * @param {String} params.caption - Подпись к файлу (опционально)
+ * @param {String} examId - ID экзамена
+ * @param {Buffer} pdfBuffer - PDF файл в виде Buffer
+ * @param {String} caption - Подпись к файлу (опционально)
  */
-async function sendExamResultsPDFToParents(params) {
+async function sendExamResultsPDFToParents(examId, pdfBuffer, caption = null) {
   try {
-    const { groupId, examTitle, pdfBuffer, caption } = params;
+    // Получаем экзамен с группой
+    const exam = await Exam.findById(examId).populate("group");
 
-    const group = await Group.findById(groupId);
+    if (!exam) {
+      log.error(`Экзамен не найден: ${examId}`);
+      return { success: false, message: "Экзамен не найден" };
+    }
+
+    const group = exam.group;
 
     if (!group) {
       log.error(`Группа не найдена`);
@@ -928,14 +973,12 @@ async function sendExamResultsPDFToParents(params) {
       return { success: false, message: "Неверный формат PDF файла" };
     }
 
-    const examTitleEscaped = escapeHtml(examTitle || "Экзамен");
+    const examTitleEscaped = escapeHtml(exam.examTitle || "Экзамен");
     const groupNameEscaped = escapeHtml(group.groupName);
 
-    const fileName =
-      `Результаты_${examTitle || "экзамена"}_${group.groupName}.pdf`.replace(
-        /[^a-zA-Zа-яА-Я0-9._-]/g,
-        "_"
-      );
+    const fileName = `Результаты_${exam.examTitle || "экзамена"}_${
+      group.groupName
+    }.pdf`.replace(/[^a-zA-Zа-яА-Я0-9._-]/g, "_");
 
     const messageCaption =
       caption ||
@@ -969,19 +1012,21 @@ async function sendExamResultsPDFToParents(params) {
 
 /**
  * Отправка краткого уведомления родителям о завершении экзамена
- * @param {Object} params
- * @param {String} params.groupId - ID группы
- * @param {String} params.examTitle - Название экзамена
- * @param {Number} params.completedCount - Количество сдавших
- * @param {Number} params.totalStudents - Всего студентов
- * @param {Number} params.averageScore - Средний балл (опционально)
+ * @param {String} examId - ID экзамена
  */
-async function sendExamCompletionNoticeToParents(params) {
+async function sendExamCompletionNoticeToParents(examId) {
   try {
-    const { groupId, examTitle, completedCount, totalStudents, averageScore } =
-      params;
+    const ExamResult = require("../exams/exam_result.model");
 
-    const group = await Group.findById(groupId);
+    // Получаем экзамен с группой
+    const exam = await Exam.findById(examId).populate("group");
+
+    if (!exam) {
+      log.error(`Экзамен не найден: ${examId}`);
+      return { success: false, message: "Экзамен не найден" };
+    }
+
+    const group = exam.group;
 
     if (!group) {
       log.error(`Группа не найдена`);
@@ -993,17 +1038,33 @@ async function sendExamCompletionNoticeToParents(params) {
       return { success: false, message: "Родительская группа не подключена" };
     }
 
-    const examTitleEscaped = escapeHtml(examTitle || "Экзамен");
+    // Получаем результаты для подсчета статистики
+    const results = await ExamResult.find({ examId: examId });
+    const totalStudents = group.students?.length || 0;
+    const submittedCount = results.length;
+    const appreciatedCount = results.filter(
+      (r) => r.status === "appreciated"
+    ).length;
+
+    // Вычисляем средний балл
+    const avgScore =
+      results.length > 0
+        ? results.reduce((sum, r) => sum + (r.score || 0), 0) / results.length
+        : 0;
+
+    const examTitleEscaped = escapeHtml(exam.examTitle || "Экзамен");
     const groupNameEscaped = escapeHtml(group.groupName);
 
     let message =
       `✅ <b>Экзамен завершен</b>\n\n` +
       `📝 Название: ${examTitleEscaped}\n` +
       `👥 Группа: ${groupNameEscaped}\n` +
-      `📊 Сдали: ${completedCount}/${totalStudents}\n`;
+      `📊 Сдано работ: ${submittedCount}/${totalStudents}\n` +
+      `✅ Принято: ${appreciatedCount}\n`;
 
-    if (averageScore !== undefined) {
-      message += `📈 Средний балл: ${averageScore.toFixed(1)}\n`;
+    if (avgScore > 0) {
+      const maxScore = exam.maxScore || 0;
+      message += `📈 Средний балл: ${avgScore.toFixed(1)}/${maxScore}\n`;
     }
 
     message += `\n📄 Подробные результаты будут отправлены отдельно.`;

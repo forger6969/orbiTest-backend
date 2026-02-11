@@ -1,4 +1,5 @@
 const Group = require("../groups/group.model");
+const { sendToMentor } = require("../socket/notify");
 const { sendExamNotification } = require("../telegrambot/bot");
 const { User } = require("../user/user.model");
 const Exam = require("./exam.model");
@@ -74,6 +75,7 @@ const addResult = async (req, res) => {
     const { projectLink, describe, examId } = req.body;
     const { id } = req.user;
 
+    const user = await User.findById(id);
     if (!projectLink || !examId) {
       return res
         .status(400)
@@ -94,7 +96,7 @@ const addResult = async (req, res) => {
         .json({ success: false, message: "Этот экзамен уже закончен" });
     }
 
-    const findMatch = await examResult.findOne({ user: id });
+    const findMatch = await examResult.findOne({ user: id, examId: examId });
 
     if (findMatch) {
       return res
@@ -111,6 +113,15 @@ const addResult = async (req, res) => {
     });
 
     await result.save();
+    await sendToMentor(user.mentor, {
+      type: "reminder",
+      title: "Новый результат!",
+      text: `Студент отправил результат экзамена ${exam.examTitle}`,
+      student: user._id,
+      additionalData: {
+        studentName: `${user.firstName} ${user.lastName}`,
+      },
+    });
 
     res.json({ success: true, result });
   } catch (err) {
