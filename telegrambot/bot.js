@@ -1,4 +1,4 @@
-// bot.js - Telegram бот для OrbiTest (Webhook режим) - ПОЛНОСТЬЮ ИСПРАВЛЕНО
+// bot.js - Telegram бот для OrbiTest (Webhook режим) - С РОДИТЕЛЬСКИМИ ГРУППАМИ
 require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
@@ -114,6 +114,16 @@ async function isGroupAlreadyLinked(chatId) {
   }
 }
 
+async function isParentGroupAlreadyLinked(chatId) {
+  try {
+    const group = await Group.findOne({ parentsTelegramId: chatId.toString() });
+    return group;
+  } catch (error) {
+    log.error("Ошибка проверки привязки родительской группы:", error);
+    return null;
+  }
+}
+
 async function linkGroupToTelegram(groupId, chatId) {
   try {
     const group = await Group.findById(groupId);
@@ -144,6 +154,45 @@ async function linkGroupToTelegram(groupId, chatId) {
   } catch (error) {
     log.error("Ошибка привязки группы:", error);
     return { success: false, message: "Произошла ошибка при привязке группы" };
+  }
+}
+
+async function linkParentGroupToTelegram(groupId, chatId) {
+  try {
+    const group = await Group.findById(groupId);
+
+    if (!group) {
+      return { success: false, message: "Группа не найдена в базе данных" };
+    }
+
+    if (
+      group.parentsTelegramId &&
+      group.parentsTelegramId !== chatId.toString()
+    ) {
+      return {
+        success: false,
+        message: `Родительская группа для "${escapeHtml(group.groupName)}" уже привязана к другому Telegram чату`,
+      };
+    }
+
+    group.parentsTelegramId = chatId.toString();
+    await group.save();
+
+    log.success(
+      `Родительская группа для ${group.groupName} успешно привязана к Telegram чату ${chatId}`
+    );
+
+    return {
+      success: true,
+      message: `👨‍👩‍👧‍👦 Родительская группа для "${escapeHtml(group.groupName)}" успешно подключена!\n\nРодители будут получать результаты экзаменов своих детей.`,
+      groupName: group.groupName,
+    };
+  } catch (error) {
+    log.error("Ошибка привязки родительской группы:", error);
+    return {
+      success: false,
+      message: "Произошла ошибка при привязке родительской группы",
+    };
   }
 }
 
@@ -232,7 +281,8 @@ bot.onText(/\/start/, async (msg) => {
       return await safeSendMessage(
         chatId,
         "👋 Привет! Я OrbiTest бот.\n\n" +
-          "🎓 Я помогаю группам получать уведомления о новых экзаменах.\n\n" +
+          "🎓 Я помогаю группам получать уведомления о новых экзаменах.\n" +
+          "👨‍👩‍👧‍👦 Родители могут получать результаты экзаменов своих детей.\n\n" +
           "📌 Чтобы начать работу:\n" +
           "1. Добавьте меня в групповой чат\n" +
           "2. Назначьте меня администратором\n" +
@@ -262,23 +312,47 @@ bot.onText(/\/start/, async (msg) => {
       );
     }
 
+    // Проверяем оба типа привязки
     const linkedGroup = await isGroupAlreadyLinked(chatId);
+    const linkedParentGroup = await isParentGroupAlreadyLinked(chatId);
+
     if (linkedGroup) {
       return await safeSendMessage(
         chatId,
-        `✅ Эта Telegram группа уже подключена к OrbiTest группе: "${escapeHtml(linkedGroup.groupName)}"\n\nВы будете получать уведомления о новых экзаменах.`
+        `✅ Эта Telegram группа уже подключена к OrbiTest группе: "${escapeHtml(linkedGroup.groupName)}"\n\n🎓 Вы будете получать уведомления о новых экзаменах.`
+      );
+    }
+
+    if (linkedParentGroup) {
+      return await safeSendMessage(
+        chatId,
+        `✅ Эта Telegram группа уже подключена как родительская для группы: "${escapeHtml(linkedParentGroup.groupName)}"\n\n👨‍👩‍👧‍👦 Вы будете получать результаты экзаменов студентов.`
       );
     }
 
     const keyboard = {
       inline_keyboard: [
-        [{ text: "🔗 Прикрепить эту группу", callback_data: "attach_group" }],
+        [
+          {
+            text: "🎓 Прикрепить как группу студентов",
+            callback_data: "attach_group",
+          },
+        ],
+        [
+          {
+            text: "👨‍👩‍👧‍👦 Прикрепить как группу родителей",
+            callback_data: "attach_parent_group",
+          },
+        ],
       ],
     };
 
     await safeSendMessage(
       chatId,
-      "👋 Добро пожаловать в OrbiTest!\n\nНажмите кнопку ниже, чтобы привязать эту Telegram группу к группе студентов в системе OrbiTest.",
+      "👋 Добро пожаловать в OrbiTest!\n\n" +
+        "Выберите тип группы:\n" +
+        "🎓 <b>Группа студентов</b> - получает уведомления о новых экзаменах\n" +
+        "👨‍👩‍👧‍👦 <b>Группа родителей</b> - получает результаты экзаменов детей",
       { reply_markup: keyboard }
     );
   } catch (error) {
@@ -301,10 +375,20 @@ bot.onText(/\/help/, async (msg) => {
       "/status - Проверить статус подключения\n" +
       "/students - Список студентов группы\n" +
       "/exams - Активные экзамены группы\n\n" +
+      "<b>Типы групп:</b>\n" +
+      "🎓 <b>Группа студентов</b> - получает:\n" +
+      "  • Уведомления о новых экзаменах\n" +
+      "  • Напоминания о дедлайнах\n" +
+      "  • Информацию об экзаменах\n\n" +
+      "👨‍👩‍👧‍👦 <b>Группа родителей</b> - получает:\n" +
+      "  • Результаты экзаменов детей\n" +
+      "  • Статистику успеваемости\n" +
+      "  • Отчеты о выполнении заданий\n\n" +
       "<b>Возможности бота:</b>\n" +
       "✅ Привязка Telegram группы к OrbiTest\n" +
       "✅ Создание новой группы автоматически\n" +
       "✅ Уведомления о новых экзаменах\n" +
+      "✅ Отправка результатов родителям\n" +
       "✅ Автоматические напоминания\n\n" +
       "<b>Требования:</b>\n" +
       "⚡️ Бот должен быть администратором группы\n" +
@@ -370,15 +454,26 @@ bot.onText(/\/status/, async (msg) => {
     }
 
     const linkedGroup = await isGroupAlreadyLinked(chatId);
+    const linkedParentGroup = await isParentGroupAlreadyLinked(chatId);
 
     if (linkedGroup) {
       await safeSendMessage(
         chatId,
-        `✅ <b>Статус: Подключено</b>\n\n` +
+        `✅ <b>Статус: Подключено (Группа студентов)</b>\n\n` +
           `📌 Группа: ${escapeHtml(linkedGroup.groupName)}\n` +
           `📝 Описание: ${escapeHtml(linkedGroup.groupDescribe || "Не указано")}\n` +
-          `👥 Студентов: ${linkedGroup.students?.length || 0}\n\n` +
-          `Вы будете получать уведомления о новых экзаменах.`
+          `👥 Студентов: ${linkedGroup.students?.length || 0}\n` +
+          `👨‍👩‍👧‍👦 Родительская группа: ${linkedGroup.parentsTelegramId ? "Подключена ✅" : "Не подключена ❌"}\n\n` +
+          `🎓 Вы будете получать уведомления о новых экзаменах.`
+      );
+    } else if (linkedParentGroup) {
+      await safeSendMessage(
+        chatId,
+        `✅ <b>Статус: Подключено (Группа родителей)</b>\n\n` +
+          `📌 Группа студентов: ${escapeHtml(linkedParentGroup.groupName)}\n` +
+          `📝 Описание: ${escapeHtml(linkedParentGroup.groupDescribe || "Не указано")}\n` +
+          `👥 Студентов: ${linkedParentGroup.students?.length || 0}\n\n` +
+          `👨‍👩‍👧‍👦 Вы будете получать результаты экзаменов студентов.`
       );
     } else {
       await safeSendMessage(
@@ -518,6 +613,34 @@ bot.on("callback_query", async (callbackQuery) => {
         message_id: msg.message_id,
         reply_markup: keyboard,
       });
+    } else if (data === "attach_parent_group") {
+      const groups = await getAllGroups();
+
+      const keyboard = {
+        inline_keyboard: groups.map((group) => [
+          {
+            text: escapeHtml(group.groupName),
+            callback_data: `select_parent_${group._id}`,
+          },
+        ]),
+      };
+
+      keyboard.inline_keyboard.push([
+        { text: "❌ Отмена", callback_data: "cancel" },
+      ]);
+
+      await bot.answerCallbackQuery(callbackQuery.id);
+
+      let messageText =
+        groups.length > 0
+          ? "👨‍👩‍👧‍👦 Выберите группу студентов, для которой эта группа будет родительской:"
+          : "❌ В системе пока нет групп студентов.\n\nСначала создайте группу студентов.";
+
+      await bot.editMessageText(messageText, {
+        chat_id: chatId,
+        message_id: msg.message_id,
+        reply_markup: keyboard,
+      });
     } else if (data === "create_new") {
       await bot.answerCallbackQuery(callbackQuery.id, {
         text: "Создаем новую группу...",
@@ -534,6 +657,25 @@ bot.on("callback_query", async (callbackQuery) => {
           : `✅ ${result.message}`;
 
         await bot.editMessageText(successMessage, {
+          chat_id: chatId,
+          message_id: msg.message_id,
+          parse_mode: "HTML",
+        });
+      } else {
+        await bot.editMessageText(`❌ ${result.message}`, {
+          chat_id: chatId,
+          message_id: msg.message_id,
+        });
+      }
+    } else if (data.startsWith("select_parent_")) {
+      const groupId = data.replace("select_parent_", "");
+
+      const result = await linkParentGroupToTelegram(groupId, chatId);
+
+      await bot.answerCallbackQuery(callbackQuery.id);
+
+      if (result.success) {
+        await bot.editMessageText(`✅ ${result.message}`, {
           chat_id: chatId,
           message_id: msg.message_id,
           parse_mode: "HTML",
@@ -584,7 +726,7 @@ bot.on("callback_query", async (callbackQuery) => {
 });
 
 // ============================================
-// ФУНКЦИЯ ОТПРАВКИ УВЕДОМЛЕНИЙ
+// ФУНКЦИИ ОТПРАВКИ УВЕДОМЛЕНИЙ
 // ============================================
 
 async function sendExamNotification(exam) {
@@ -639,6 +781,241 @@ async function sendExamNotification(exam) {
     return { success: true, message: "Уведомление отправлено" };
   } catch (error) {
     log.error("Ошибка отправки уведомления:", error);
+    return { success: false, message: error.message };
+  }
+}
+
+// ============================================
+// ФУНКЦИИ ДЛЯ РОДИТЕЛЬСКИХ ГРУПП
+// ============================================
+
+/**
+ * Отправка текстовых результатов экзамена родителям
+ * @param {Object} examResults - Результаты экзамена
+ * @param {String} examResults.groupId - ID группы
+ * @param {String} examResults.examTitle - Название экзамена
+ * @param {Array} examResults.results - Массив результатов студентов
+ * @param {String} examResults.examEnd - Дата окончания экзамена
+ */
+async function sendExamResultsToParents(examResults) {
+  try {
+    const { groupId, examTitle, results, examEnd } = examResults;
+
+    const group = await Group.findById(groupId).populate("students");
+
+    if (!group) {
+      log.error(`Группа не найдена для результатов экзамена`);
+      return { success: false, message: "Группа не найдена" };
+    }
+
+    if (!group.parentsTelegramId) {
+      log.info(`Родительская группа не привязана для ${group.groupName}`);
+      return { success: false, message: "Родительская группа не подключена" };
+    }
+
+    const examTitleEscaped = escapeHtml(examTitle || "Экзамен");
+    const endDate = examEnd
+      ? new Date(examEnd).toLocaleString("ru-RU", { timeZone: "Asia/Tashkent" })
+      : "Не указан";
+
+    let message =
+      `📊 <b>Результаты экзамена</b>\n\n` +
+      `📝 Экзамен: ${examTitleEscaped}\n` +
+      `📅 Завершен: ${endDate}\n` +
+      `👥 Группа: ${escapeHtml(group.groupName)}\n\n` +
+      `<b>Результаты студентов:</b>\n\n`;
+
+    if (!results || results.length === 0) {
+      message += "❌ Пока нет результатов\n";
+    } else {
+      // Сортируем по баллам (по убыванию)
+      const sortedResults = [...results].sort(
+        (a, b) => (b.score || 0) - (a.score || 0)
+      );
+
+      sortedResults.forEach((result, index) => {
+        const studentName = escapeHtml(
+          result.studentName || "Неизвестный студент"
+        );
+        const score = result.score !== undefined ? result.score : "—";
+        const maxScore = result.maxScore !== undefined ? result.maxScore : "—";
+        const percentage =
+          result.percentage !== undefined
+            ? `${result.percentage.toFixed(1)}%`
+            : "—";
+
+        // Эмодзи в зависимости от процента
+        let emoji = "📝";
+        if (result.percentage >= 90) emoji = "🌟";
+        else if (result.percentage >= 75) emoji = "✅";
+        else if (result.percentage >= 60) emoji = "👍";
+        else if (result.percentage >= 50) emoji = "📊";
+        else if (result.percentage < 50) emoji = "❗️";
+
+        message +=
+          `${index + 1}. ${emoji} <b>${studentName}</b>\n` +
+          `   Балл: ${score}/${maxScore} (${percentage})\n`;
+
+        if (result.completedAt) {
+          const completedDate = new Date(result.completedAt).toLocaleString(
+            "ru-RU",
+            {
+              timeZone: "Asia/Tashkent",
+              day: "2-digit",
+              month: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+            }
+          );
+          message += `   Сдано: ${completedDate}\n`;
+        }
+        message += `\n`;
+      });
+
+      // Статистика группы
+      const avgScore =
+        results.reduce((sum, r) => sum + (r.score || 0), 0) / results.length;
+      const avgPercentage =
+        results.reduce((sum, r) => sum + (r.percentage || 0), 0) /
+        results.length;
+      const completedCount = results.filter((r) => r.completed).length;
+
+      message +=
+        `\n📈 <b>Статистика:</b>\n` +
+        `Средний балл: ${avgScore.toFixed(1)}\n` +
+        `Средний процент: ${avgPercentage.toFixed(1)}%\n` +
+        `Сдали: ${completedCount}/${results.length}\n`;
+    }
+
+    await safeSendMessage(group.parentsTelegramId, message);
+
+    log.success(
+      `Результаты экзамена отправлены родителям группы ${group.groupName}`
+    );
+    return { success: true, message: "Результаты отправлены родителям" };
+  } catch (error) {
+    log.error("Ошибка отправки результатов родителям:", error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * Отправка PDF файла с результатами родителям
+ * @param {Object} params
+ * @param {String} params.groupId - ID группы
+ * @param {String} params.examTitle - Название экзамена
+ * @param {Buffer} params.pdfBuffer - PDF файл в виде Buffer
+ * @param {String} params.caption - Подпись к файлу (опционально)
+ */
+async function sendExamResultsPDFToParents(params) {
+  try {
+    const { groupId, examTitle, pdfBuffer, caption } = params;
+
+    const group = await Group.findById(groupId);
+
+    if (!group) {
+      log.error(`Группа не найдена`);
+      return { success: false, message: "Группа не найдена" };
+    }
+
+    if (!group.parentsTelegramId) {
+      log.info(`Родительская группа не привязана для ${group.groupName}`);
+      return { success: false, message: "Родительская группа не подключена" };
+    }
+
+    if (!pdfBuffer || !Buffer.isBuffer(pdfBuffer)) {
+      log.error("PDF файл не предоставлен или имеет неверный формат");
+      return { success: false, message: "Неверный формат PDF файла" };
+    }
+
+    const examTitleEscaped = escapeHtml(examTitle || "Экзамен");
+    const groupNameEscaped = escapeHtml(group.groupName);
+
+    const fileName =
+      `Результаты_${examTitle || "экзамена"}_${group.groupName}.pdf`.replace(
+        /[^a-zA-Zа-яА-Я0-9._-]/g,
+        "_"
+      );
+
+    const messageCaption =
+      caption ||
+      `📊 <b>Результаты экзамена</b>\n\n` +
+        `📝 Экзамен: ${examTitleEscaped}\n` +
+        `👥 Группа: ${groupNameEscaped}\n\n` +
+        `📄 Подробные результаты в прикрепленном файле`;
+
+    await bot.sendDocument(
+      group.parentsTelegramId,
+      pdfBuffer,
+      {
+        caption: messageCaption,
+        parse_mode: "HTML",
+      },
+      {
+        filename: fileName,
+        contentType: "application/pdf",
+      }
+    );
+
+    log.success(
+      `PDF с результатами отправлен родителям группы ${group.groupName}`
+    );
+    return { success: true, message: "PDF отправлен родителям" };
+  } catch (error) {
+    log.error("Ошибка отправки PDF родителям:", error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * Отправка краткого уведомления родителям о завершении экзамена
+ * @param {Object} params
+ * @param {String} params.groupId - ID группы
+ * @param {String} params.examTitle - Название экзамена
+ * @param {Number} params.completedCount - Количество сдавших
+ * @param {Number} params.totalStudents - Всего студентов
+ * @param {Number} params.averageScore - Средний балл (опционально)
+ */
+async function sendExamCompletionNoticeToParents(params) {
+  try {
+    const { groupId, examTitle, completedCount, totalStudents, averageScore } =
+      params;
+
+    const group = await Group.findById(groupId);
+
+    if (!group) {
+      log.error(`Группа не найдена`);
+      return { success: false, message: "Группа не найдена" };
+    }
+
+    if (!group.parentsTelegramId) {
+      log.info(`Родительская группа не привязана для ${group.groupName}`);
+      return { success: false, message: "Родительская группа не подключена" };
+    }
+
+    const examTitleEscaped = escapeHtml(examTitle || "Экзамен");
+    const groupNameEscaped = escapeHtml(group.groupName);
+
+    let message =
+      `✅ <b>Экзамен завершен</b>\n\n` +
+      `📝 Название: ${examTitleEscaped}\n` +
+      `👥 Группа: ${groupNameEscaped}\n` +
+      `📊 Сдали: ${completedCount}/${totalStudents}\n`;
+
+    if (averageScore !== undefined) {
+      message += `📈 Средний балл: ${averageScore.toFixed(1)}\n`;
+    }
+
+    message += `\n📄 Подробные результаты будут отправлены отдельно.`;
+
+    await safeSendMessage(group.parentsTelegramId, message);
+
+    log.success(
+      `Уведомление о завершении экзамена отправлено родителям группы ${group.groupName}`
+    );
+    return { success: true, message: "Уведомление отправлено родителям" };
+  } catch (error) {
+    log.error("Ошибка отправки уведомления родителям:", error);
     return { success: false, message: error.message };
   }
 }
@@ -805,6 +1182,9 @@ process.on("uncaughtException", (error) => {
 module.exports = {
   bot,
   sendExamNotification,
+  sendExamResultsToParents,
+  sendExamResultsPDFToParents,
+  sendExamCompletionNoticeToParents,
   initBot,
   createAndLinkNewGroup,
   webhookHandler,
