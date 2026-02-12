@@ -9,6 +9,7 @@ const {
   getResultsForEvaluation,
   getResultDetail,
   sendResultsToParents,
+  getExamById,
 } = require("./exam.controller");
 const {
   adminMiddleware,
