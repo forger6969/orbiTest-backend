@@ -33,7 +33,6 @@ const createExam = async (req, res) => {
         message: "Дата окончания экзамена должна быть после начала",
       });
     }
-    // pending;
 
     const findGroup = await Group.findById(group);
     if (!findGroup) {
@@ -210,7 +209,6 @@ const evaluateExamResult = async (req, res) => {
     const { resultId, evaluatedRequirements, feedback } = req.body;
     const { id: mentorId } = req.user;
 
-    // Валидация входных данных
     if (
       !resultId ||
       !evaluatedRequirements ||
@@ -222,7 +220,6 @@ const evaluateExamResult = async (req, res) => {
       });
     }
 
-    // Находим результат экзамена
     const result = await examResult.findById(resultId).populate({
       path: "examId",
       populate: {
@@ -238,7 +235,6 @@ const evaluateExamResult = async (req, res) => {
       });
     }
 
-    // Проверяем, что оценивающий является ментором группы
     if (result.examId.group.mentor.toString() !== mentorId.toString()) {
       return res.status(403).json({
         success: false,
@@ -246,7 +242,6 @@ const evaluateExamResult = async (req, res) => {
       });
     }
 
-    // Проверяем, что экзамен еще не оценен
     if (result.status === "appreciated" || result.status === "rejected") {
       return res.status(400).json({
         success: false,
@@ -254,7 +249,6 @@ const evaluateExamResult = async (req, res) => {
       });
     }
 
-    // Валидация evaluatedRequirements
     if (evaluatedRequirements.length !== result.requirements.length) {
       return res.status(400).json({
         success: false,
@@ -262,7 +256,6 @@ const evaluateExamResult = async (req, res) => {
       });
     }
 
-    // Обновляем требования и подсчитываем общий балл
     let totalScore = 0;
     const updatedRequirements = result.requirements.map((req, index) => {
       const evaluated = evaluatedRequirements[index];
@@ -280,12 +273,10 @@ const evaluateExamResult = async (req, res) => {
       };
     });
 
-    // Определяем итоговый статус
     const maxScore = result.examId.maxScore;
-    const passThreshold = maxScore * 0.6; // 60% для сдачи
+    const passThreshold = maxScore * 0.6;
     const newStatus = totalScore >= passThreshold ? "appreciated" : "rejected";
 
-    // Обновляем результат
     result.requirements = updatedRequirements;
     result.score = totalScore;
     result.status = newStatus;
@@ -314,7 +305,6 @@ const evaluateExamResult = async (req, res) => {
   }
 };
 
-// Получить результаты для оценки (только для ментора)
 const getResultsForEvaluation = async (req, res) => {
   try {
     const { examId } = req.params;
@@ -329,7 +319,6 @@ const getResultsForEvaluation = async (req, res) => {
       });
     }
 
-    // Проверяем права ментора
     if (exam.group.mentor.toString() !== mentorId.toString()) {
       return res.status(403).json({
         success: false,
@@ -358,7 +347,6 @@ const getResultsForEvaluation = async (req, res) => {
   }
 };
 
-// Получить детали одного результата
 const getResultDetail = async (req, res) => {
   try {
     const { resultId } = req.params;
@@ -382,7 +370,6 @@ const getResultDetail = async (req, res) => {
       });
     }
 
-    // Проверка прав доступа
     const isMentor =
       result.examId.group.mentor.toString() === userId.toString();
     const isOwner = result.user._id.toString() === userId.toString();

@@ -13,8 +13,8 @@ const { sendToMentor } = require("../socket/notify");
 // Конфигурация
 const MONGODB_URI =
   process.env.MONGODB_URI || "mongodb://localhost:27017/orbitest";
-const CHECK_INTERVAL = "3 minutes"; // Интервал проверки экзаменов
-const REMINDER_THRESHOLD_HOURS = 3; // Начинаем напоминания за 3 часа
+const CHECK_INTERVAL = "3 minutes";
+const REMINDER_THRESHOLD_HOURS = 3;
 
 // Инициализация Agenda
 const agenda = new Agenda({
@@ -152,6 +152,11 @@ async function sendCompletionNotification(exam, group) {
     });
 
     await sendExamCompletionNoticeToParents(exam._id);
+    await sendToMentor(group.mentor, {
+      title: `Эказмен "${examName}" завершен`,
+      text: `Экзамен "${examName}" завершен , оцените работы и отправьте результат родителям`,
+      notifyType: "reminder",
+    });
 
     log.success(`Уведомление о завершении отправлено для экзамена ${examName}`);
     return { success: true };
