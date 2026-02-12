@@ -31,5 +31,6 @@ routes.get(
 );
 routes.get("/result-detail/:resultId", mentorMiddleware, getResultDetail);
 routes.post("/send-results/:id", mentorMiddleware, sendResultsToParents);
+routes.get("/:id", getExamById);
 
 module.exports = routes;

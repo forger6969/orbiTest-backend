@@ -428,6 +428,30 @@ const sendResultsToParents = async (req, res) => {
   }
 };
 
+const getExamById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const exam = await Exam.findById(id);
+
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Экзамен не найден",
+      });
+    }
+
+    res.json({
+      success: true,
+      exam,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 module.exports = {
   createExam,
   getAllExams,
@@ -439,4 +463,5 @@ module.exports = {
   getResultDetail,
   getDetails,
   sendResultsToParents,
+  getExamById,
 };
