@@ -1,6 +1,9 @@
 const Group = require("../groups/group.model");
 const { sendToMentor } = require("../socket/notify");
-const { sendExamNotification } = require("../telegrambot/bot");
+const {
+  sendExamNotification,
+  sendExamResultsToParents,
+} = require("../telegrambot/bot");
 const { User } = require("../user/user.model");
 const Exam = require("./exam.model");
 const examResult = require("./exam_result.model");
@@ -398,6 +401,33 @@ const getResultDetail = async (req, res) => {
   }
 };
 
+const sendResultsToParents = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const exam = await Exam.findById(id);
+
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Экзамен не найден",
+      });
+    }
+
+    await sendExamResultsToParents(exam._id);
+
+    res.status(200).json({
+      success: true,
+      message: "Результаты успешно отправлены родителям",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 module.exports = {
   createExam,
   getAllExams,
@@ -408,4 +438,5 @@ module.exports = {
   getResultsForEvaluation,
   getResultDetail,
   getDetails,
+  sendResultsToParents,
 };

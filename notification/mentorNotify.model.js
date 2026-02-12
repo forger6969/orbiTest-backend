@@ -12,7 +12,6 @@ const mentorNotifySchema = mongoose.Schema({
   student: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
-    required: true,
   },
   test: { type: mongoose.Schema.Types.ObjectId, ref: "Test" },
   result: { type: mongoose.Schema.Types.ObjectId, ref: "Result" },

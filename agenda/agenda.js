@@ -110,7 +110,14 @@ async function sendReminderToGroup(exam, group, timeRemaining) {
     });
 
     await sendToMentor(group.mentor, {
-      type: "reminder",
+      title: `Напоминание: экзамен "${examName}"`,
+      text: `До завершения экзамена "${examName}" осталось ${formattedTime}. Группа: ${group.groupName}`,
+      notifyType: "reminder",
+      additionalData: {
+        examId: exam._id,
+        groupId: group._id,
+        timeRemaining: formattedTime,
+      },
     });
 
     log.success(
@@ -157,6 +164,7 @@ async function sendCompletionNotification(exam, group) {
       text: `Экзамен "${examName}" завершен , оцените работы и отправьте результат родителям`,
       notifyType: "reminder",
     });
+    log.success(`отправлено ссокет`);
 
     log.success(`Уведомление о завершении отправлено для экзамена ${examName}`);
     return { success: true };

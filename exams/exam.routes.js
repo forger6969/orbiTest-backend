@@ -8,6 +8,7 @@ const {
   evaluateExamResult,
   getResultsForEvaluation,
   getResultDetail,
+  sendResultsToParents,
 } = require("./exam.controller");
 const {
   adminMiddleware,
@@ -29,5 +30,6 @@ routes.get(
   getResultsForEvaluation
 );
 routes.get("/result-detail/:resultId", mentorMiddleware, getResultDetail);
+routes.post("/send-results/:id", mentorMiddleware, sendResultsToParents);
 
 module.exports = routes;

@@ -4,6 +4,7 @@ const TelegramBot = require("node-telegram-bot-api");
 const express = require("express");
 const Group = require("../groups/group.model");
 const Exam = require("../exams/exam.model");
+const { sendToMentor } = require("../socket/notify");
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
@@ -799,8 +800,8 @@ async function sendExamNotification(exam) {
  */
 async function sendExamResultsToParents(examId) {
   try {
-    const ExamResult = require("../results/result.model");
-    const { User } = require("../users/user.model");
+    const ExamResult = require("../exams/exam_result.model");
+    const { User } = require("../user/user.model");
 
     // Получаем экзамен с информацией о группе
     const exam = await Exam.findById(examId).populate("group");
@@ -819,6 +820,13 @@ async function sendExamResultsToParents(examId) {
 
     if (!group.parentsTelegramId) {
       log.info(`Родительская группа не привязана для ${group.groupName}`);
+
+      await sendToMentor(group.mentor, {
+        title: `Сообщние в группу ${group.groupName} родителей не отправлено`,
+        text: "Подключите в группу телеграм бота для отправки сообщений родителям , напиши боту @orbiTest_support_bot чтобы получить инструкции",
+        notifyType: "error",
+      });
+
       return { success: false, message: "Родительская группа не подключена" };
     }
 
@@ -927,6 +935,12 @@ async function sendExamResultsToParents(examId) {
         `❌ Отклонено: ${rejectedCount}\n` +
         `Всего работ: ${results.length}\n`;
     }
+
+    await sendToMentor(group.mentor, {
+      title: `Результаты экзамена ${exam.examTitle} отправлены родителям`,
+      text: `Результаты экзамена ${exam.examTitle} отправлены родителям группы ${group.groupName}`,
+      notifyType: "success",
+    });
 
     await safeSendMessage(group.parentsTelegramId, message);
 
