@@ -3,18 +3,24 @@ const { default: mongoose, Schema } = require("mongoose");
 const userSchema = mongoose.Schema({
   username: {
     type: String,
-    required: function () {
-      return !this.googleId; // Обязательно только если не Google-пользователь
-    },
+    required: [
+      function () {
+        return !this.googleId;
+      },
+      "Имя пользователя обязательно",
+    ],
   },
-  firstName: { type: String, required: true },
-  lastName: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
+  firstName: { type: String, required: [true, "Имя обязательно"] },
+  lastName: { type: String, required: [true, "Фамилия обязательна"] },
+  email: { type: String, required: [true, "Email обязателен"], unique: true },
   password: {
     type: String,
-    required: function () {
-      return !this.googleId; // Обязательно только если не Google-пользователь
-    },
+    required: [
+      function () {
+        return !this.googleId;
+      },
+      "Пароль обязателен",
+    ],
     select: false,
   },
   groupID: { type: Schema.Types.ObjectId, ref: "Group", default: null },
@@ -39,7 +45,7 @@ const userSchema = mongoose.Schema({
   },
   isProfileComplete: {
     type: Boolean,
-    default: true, // ✅ По умолчанию true для обратной совместимости
+    default: true,
   },
 });
 

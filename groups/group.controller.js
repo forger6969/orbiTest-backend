@@ -81,18 +81,17 @@ const addStudentToGroup = async (req, res) => {
         .json({ success: false, message: "group not found" });
     }
 
-    const findUserInGroup = group.students.find(
-      (f) => f.toString() === studentId
-    );
-
-    if (findUserInGroup) {
+    // Используем addToSet для предотвращения дубликатов и корректной обработки ObjectId
+    const beforeCount = group.students.length;
+    group.students.addToSet(studentId);
+    
+    if (group.students.length === beforeCount) {
       return res.status(400).json({
         success: false,
         message: "Student bu gruppaga allaqachon qoshilgan",
       });
     }
 
-    group.students.push(studentId);
     await group.save();
 
     user.groupID = groupId;

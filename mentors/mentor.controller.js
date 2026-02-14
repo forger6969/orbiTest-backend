@@ -102,7 +102,6 @@ const loginMentor = async (req, res) => {
   }
 };
 
-// ✅ CALLBACK ДЛЯ GOOGLE AUTH (МЕНТОРЫ)
 const googleMentorCallback = async (req, res) => {
   try {
     const mentor = req.user.mentor;
@@ -233,9 +232,6 @@ const deleteNotify = async (req, res) => {
   }
 };
 
-// ==================== НОВЫЕ ФУНКЦИИ ДЛЯ ИЗМЕНЕНИЯ ПРОФИЛЯ ====================
-
-// Временное хранилище кодов подтверждения (в production использовать Redis)
 const verificationCodes = new Map();
 
 // Генерация случайного 6-значного кода

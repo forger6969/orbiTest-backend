@@ -6,39 +6,51 @@ const testSchema = mongoose.Schema(
   {
     testType: {
       type: String,
-      required: true,
-      enum: ["react", "node", "javaScript", "python", "html", "css", "vue"],
+      required: [true, "Тип теста обязателен"],
+      enum: {
+        values: ["react", "node", "javaScript", "python", "html", "css", "vue"],
+        message: "Некорректный тип теста",
+      },
     },
     questions: [
       {
         questiondId: { type: Number, default: Date.now() },
-        question: { type: String, required: true },
+        question: { type: String, required: [true, "Текст вопроса обязателен"] },
         variants: {
-          a: { type: String, required: true },
-          b: { type: String, required: true },
-          c: { type: String, required: true },
-          d: { type: String, required: true },
+          a: { type: String, required: [true, "Вариант 'a' обязателен"] },
+          b: { type: String, required: [true, "Вариант 'b' обязателен"] },
+          c: { type: String, required: [true, "Вариант 'c' обязателен"] },
+          d: { type: String, required: [true, "Вариант 'd' обязателен"] },
         },
         correctAnswer: {
           type: String,
-          enum: ["a", "b", "c", "d"],
-          required: true,
+          enum: {
+            values: ["a", "b", "c", "d"],
+            message: "Верный ответ должен быть a, b, c или d",
+          },
+          required: [true, "Верный ответ обязателен"],
           select: false,
         },
-        questionsScore: { type: Number, required: true },
+        questionsScore: {
+          type: Number,
+          required: [true, "Баллы за вопрос обязательны"],
+        },
       },
     ],
-    testTitle: { type: String, required: true },
+    testTitle: { type: String, required: [true, "Заголовок теста обязателен"] },
     testGrade: {
       type: String,
-      required: true,
-      enum: ["junior", "strongJunior", "middle", "strongMiddle", "senior"],
+      required: [true, "Уровень теста обязателен"],
+      enum: {
+        values: ["junior", "strongJunior", "middle", "strongMiddle", "senior"],
+        message: "Некорректный уровень сложности",
+      },
     },
     gradeExperience: {
       type: Number,
-      required: true,
-      min: 1,
-      max: 10,
+      required: [true, "Опыт за тест обязателен"],
+      min: [1, "Минимальный опыт - 1"],
+      max: [10, "Максимальный опыт - 10"],
     },
     testDescribe: {
       type: String,
@@ -52,7 +64,7 @@ const testSchema = mongoose.Schema(
   },
   {
     timestamps: true,
-  },
+  }
 );
 
 testSchema.virtual("questionsCount").get(function () {

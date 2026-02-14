@@ -10,6 +10,7 @@ const {
   getResultDetail,
   sendResultsToParents,
   getExamById,
+  getMyResults,
 } = require("./exam.controller");
 const {
   adminMiddleware,
@@ -32,6 +33,7 @@ routes.get(
 );
 routes.get("/result-detail/:resultId", mentorMiddleware, getResultDetail);
 routes.post("/send-results/:id", mentorMiddleware, sendResultsToParents);
+routes.get("/my-results", tokenMiddleware, getMyResults);
 routes.get("/:id", getExamById);
 
 module.exports = routes;

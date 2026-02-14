@@ -2,29 +2,41 @@ const { default: mongoose, Schema } = require("mongoose");
 
 const examSchema = new Schema(
   {
-    examTitle: { type: String, required: true },
+    examTitle: { type: String, required: [true, "Заголовок экзамена обязателен"] },
     requirements: [
       {
-        requirement: { type: String, required: true },
-        score: { type: Number, required: true, min: 1, max: 10 },
+        requirement: { type: String, required: [true, "Требование обязательно"] },
+        score: {
+          type: Number,
+          required: [true, "Баллы обязательны"],
+          min: [1, "Минимум 1 балл"],
+          max: [10, "Максимум 10 баллов"],
+        },
       },
     ],
     examDescribe: { type: String, default: "" },
     status: {
       type: String,
-      enum: ["completed", "underway"],
+      enum: {
+        values: ["completed", "underway"],
+        message: "Статус должен быть 'completed' или 'underway'",
+      },
       default: "underway",
     },
-    examStart: { type: Date, required: true },
-    examEnd: { type: Date, required: true },
+    examStart: { type: Date, required: [true, "Дата начала обязательна"] },
+    examEnd: { type: Date, required: [true, "Дата окончания обязательна"] },
     isEnd: { type: Boolean, default: false },
-    group: { type: Schema.Types.ObjectId, ref: "Group", required: true },
-    
-    lastReminderSent: { type: Date, default: null }
+    group: {
+      type: Schema.Types.ObjectId,
+      ref: "Group",
+      required: [true, "Группа обязательна"],
+    },
+
+    lastReminderSent: { type: Date, default: null },
   },
   {
     timestamps: true,
-  },
+  }
 );
 
 examSchema.virtual("maxScore").get(function () {

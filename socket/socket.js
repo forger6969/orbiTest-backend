@@ -209,6 +209,14 @@ function initSocket(io) {
       }
     });
 
+    socket.on("markAsViewedAll", async () => {
+      try {
+        await Notify;
+      } catch (err) {
+        console.error("Error markin all at view:", error);
+      }
+    });
+
     socket.on("disconnect", () => {
       try {
         for (const [userId, socketId] of connectedUsers.entries()) {
@@ -271,6 +279,27 @@ function initSocket(io) {
           "❌ [MENTORS] Error marking notification as viewed:",
           error
         );
+      }
+    });
+
+    socket.on("markAsViewedAll", async (userId, callback) => {
+      try {
+        console.log("[MENTOR] id:", userId);
+        await MentorNotify.updateMany(
+          { mentor: userId, status: "pending" },
+          { $set: { status: "viewed" } }
+        );
+
+        const newNotifies = await MentorNotify.find({ mentor: userId }).sort({
+          createdAt: -1,
+        });
+
+        callback(newNotifies); // возвращаем клиенту
+
+        console.log("✅ All mentor notifications marked as viewed");
+      } catch (err) {
+        console.error("[MENTORS] error to mark all notifications", err);
+        callback({ error: "Failed to mark notifications" });
       }
     });
 

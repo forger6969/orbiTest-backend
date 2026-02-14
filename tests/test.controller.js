@@ -6,6 +6,16 @@ const { sendToUser, sendToStudentMentor } = require("../socket/notify");
 const Notify = require("../notification/notify.model");
 const Group = require("../groups/group.model");
 
+// Функция для перемешивания массива (Fisher-Yates)
+const shuffleArray = (array) => {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
+
 // helper function notify jonatishga
 const createAndSendNotify = async ({
   userId,
@@ -24,7 +34,6 @@ const createAndSendNotify = async ({
 };
 
 // hamma bor testlani olish
-
 const getAllTests = async (req, res) => {
   try {
     const tests = await Test.find();
@@ -34,12 +43,12 @@ const getAllTests = async (req, res) => {
   }
 };
 
-// id boyicha 1 ta testni olish
+// id boyicha 1 ta testni olish (С ПЕРЕМЕШИВАНИЕМ)
 const getTestById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const test = await Test.findById(id);
+    const test = await Test.findById(id).lean(); // Используем lean() для работы с простым объектом
 
     if (!test) {
       return res
@@ -47,8 +56,35 @@ const getTestById = async (req, res) => {
         .json({ success: false, message: "Test not found" });
     }
 
+    // 1. Перемешиваем вопросы
+    let shuffledQuestions = shuffleArray(test.questions);
+
+    // 2. Перемешиваем варианты ответов внутри каждого вопроса
+    shuffledQuestions = shuffledQuestions.map((q) => {
+      // Превращаем объект вариантов в массив пар [ключ, текст]
+      // Например: [['a', 'React'], ['b', 'Vue'], ...]
+      const variantsArray = Object.entries(q.variants);
+      
+      // Перемешиваем этот массив
+      const shuffledVariantsArray = shuffleArray(variantsArray);
+      
+      // Превращаем обратно в объект
+      const shuffledVariants = Object.fromEntries(shuffledVariantsArray);
+
+      return {
+        ...q,
+        variants: shuffledVariants,
+      };
+    });
+
+    // Заменяем оригинальные вопросы на перемешанные
+    test.questions = shuffledQuestions;
+
     res.json({ success: true, test });
-  } catch (err) {}
+  } catch (err) {
+    console.error("getTestById error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 // yangi test create qilish (faqat admin ni dostupi bor)

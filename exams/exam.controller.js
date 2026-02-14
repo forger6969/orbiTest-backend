@@ -1,5 +1,8 @@
 const Group = require("../groups/group.model");
-const { sendToMentor } = require("../socket/notify");
+const {
+  sendToMentor,
+  sendExamAssignedNotification,
+} = require("../socket/notify");
 const {
   sendExamNotification,
   sendExamResultsToParents,
@@ -56,6 +59,11 @@ const createExam = async (req, res) => {
     await exam.save();
 
     sendExamNotification(exam);
+    console.log(findGroup);
+
+    findGroup.students.forEach(async (student) => {
+      await sendExamAssignedNotification(student, exam);
+    });
 
     res.json({ success: true, exam });
   } catch (err) {
@@ -452,6 +460,18 @@ const getExamById = async (req, res) => {
   }
 };
 
+const getMyResults = async (req, res) => {
+  try {
+    const { id } = req.user;
+    console.log(id);
+
+    const results = await examResult.find({ user: id });
+    res.json({ results });
+  } catch (err) {
+    console.log(err);
+  }
+};
+
 module.exports = {
   createExam,
   getAllExams,
@@ -464,4 +484,5 @@ module.exports = {
   getDetails,
   sendResultsToParents,
   getExamById,
+  getMyResults,
 };

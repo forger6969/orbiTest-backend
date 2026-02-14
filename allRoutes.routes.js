@@ -4,6 +4,7 @@ const testRoutes = require("./tests/test.routes");
 const groupRoutes = require("./groups/group.routes");
 const examRoutes = require("./exams/exam.routes");
 const mentorRoutes = require("./mentors/mentor.routes");
+const notifyRoutes = require("./notification/notifications.routes");
 
 const registerRotues = (app) => {
   app.use("/api/auth", authRoutes);
@@ -12,6 +13,7 @@ const registerRotues = (app) => {
   app.use("/api/group", groupRoutes);
   app.use("/api/exam", examRoutes);
   app.use("/api/mentor", mentorRoutes);
+  app.use("/api/notifications", notifyRoutes);
 };
 
 module.exports = registerRotues;

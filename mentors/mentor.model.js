@@ -1,19 +1,22 @@
 const { default: mongoose } = require("mongoose");
 
 const mentorSchema = mongoose.Schema({
-  firstName: { type: String, required: true },
-  lastName: { type: String, required: true },
+  firstName: { type: String, required: [true, "Имя обязательно"] },
+  lastName: { type: String, required: [true, "Фамилия обязательна"] },
   email: {
     type: String,
     required: [true, "Email обязателен"],
-    unique: [true, "Пользователь с таким email уже зарегестрирован"],
+    unique: [true, "Пользователь с таким email уже зарегистрирован"],
     match: [/^\S+@\S+\.\S+$/, "Некорректный формат email"],
   },
   password: {
     type: String,
-    required: function () {
-      return !this.googleId;
-    },
+    required: [
+      function () {
+        return !this.googleId;
+      },
+      "Пароль обязателен",
+    ],
     select: false,
   },
 

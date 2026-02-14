@@ -9,15 +9,21 @@ const {
   registrationEmailTemplate,
 } = require("../utils/EmailSender");
 const { sendToMentor } = require("../socket/notify");
+const { userZodSchema, loginZodSchema } = require("./userZodSchema");
 
 const registerUser = async (req, res) => {
   try {
+    const validation = userZodSchema.safeParse(req.body);
+
+    if (!validation.success) {
+      return res.status(400).json({
+        success: false,
+        message: validation.error.errors[0].message,
+      });
+    }
+
     const { username, email, password, groupID, firstName, lastName } =
       req.body;
-
-    if (!username || !email || !password) {
-      return res.status(400).json({ success: false, message: "add all keys!" });
-    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -68,7 +74,7 @@ const registerUser = async (req, res) => {
     });
 
     if (groupID && group) {
-      group.students.push(newUser._id);
+      group.students.addToSet(newUser._id);
       await group.save();
 
       if (group.telegramId) {
@@ -91,14 +97,16 @@ const registerUser = async (req, res) => {
 
 const loginUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const validation = loginZodSchema.safeParse(req.body);
 
-    if (!email || !password) {
+    if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: "Email and password are required",
+        message: validation.error.errors[0].message,
       });
     }
+
+    const { email, password } = req.body;
 
     const user = await User.findOne({ email }).select("+password");
 
@@ -255,11 +263,9 @@ const completeProfile = async (req, res) => {
 
     await user.save();
 
-    // Добавляем студента в группу
-    if (!group.students.includes(user._id)) {
-      group.students.push(user._id);
-      await group.save();
-    }
+    // Добавляем студента в группу (используем addToSet для надежности)
+    group.students.addToSet(user._id);
+    await group.save();
 
     // Отправляем email
     await sendEmail({

@@ -2,7 +2,7 @@ const { default: mongoose, Schema } = require("mongoose");
 
 const groupSchema = mongoose.Schema(
   {
-    groupName: { type: String, required: true },
+    groupName: { type: String, required: [true, "Название группы обязательно"] },
     groupDescribe: { type: String, default: "" },
     students: [{ type: Schema.Types.ObjectId, ref: "User" }],
     avatar: {
@@ -11,11 +11,21 @@ const groupSchema = mongoose.Schema(
         "https://media.licdn.com/dms/image/sync/v2/D4D27AQF-rPowGZp8QA/articleshare-shrink_800/articleshare-shrink_800/0/1729615523861?e=2147483647&v=beta&t=vd4PiWwC7S8HwDvyd8q57Y2LppPmDqi0cna6KImOT0o",
     },
     groupPerformance: { type: Number, default: 0 },
-    groupTime: { type: String, required: true },
-    groupDay: { type: String, enum: ["even", "odd"] },
+    groupTime: { type: String, required: [true, "Время группы обязательно"] },
+    groupDay: {
+      type: String,
+      enum: {
+        values: ["even", "odd"],
+        message: "День группы должен быть 'even' или 'odd'",
+      },
+    },
     telegramId: { type: String, default: null },
     parentsTelegramId: { type: String, default: null },
-    mentor: { type: Schema.Types.ObjectId, ref: "Mentor", required: true },
+    mentor: {
+      type: Schema.Types.ObjectId,
+      ref: "Mentor",
+      required: [true, "Ментор обязателен"],
+    },
     attemptsCount: { type: Number, default: 0 },
     totalScore: { type: Number, default: 0 },
   },
